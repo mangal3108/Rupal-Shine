@@ -40,6 +40,7 @@ On Windows you can also double-click `start.bat`.
 | --- | --- |
 | `server.js` | Web server, pricing, orders, payments and the admin API |
 | `store.js` | Data layer: loads and saves everything in MongoDB |
+| `pincode.js` | Indian states list and the PIN code checker used at checkout |
 | `views.js` | The storefront pages |
 | `public/css`, `public/js` | Storefront styles and scripts |
 | `public/admin` | The admin panel script and styles |

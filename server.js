@@ -8,6 +8,7 @@ const express = require('express');
 const multer = require('multer');
 const crypto = require('crypto');
 const views = require('./views');
+const pincode = require('./pincode');
 const { db, middleware: storeMiddleware, stockMoved, nextOrderNumber, saveUpload, getUpload, ALL_LISTS } = require('./store');
 
 const PORT = process.env.PORT || 3000;
@@ -218,6 +219,11 @@ app.get('/uploads/:name', async (req, res, next) => {
     if (!file) return res.status(404).type('text').send('Not found');
     res.set('Cache-Control', 'public, max-age=31536000, immutable').type(file.type).send(file.data);
   } catch (e) { res.status(503).type('text').send('Unavailable'); }
+});
+// PIN code checker used by the checkout page (needs no store data)
+app.get('/api/pincode/:pin', async (req, res) => {
+  const r = await pincode.lookup(req.params.pin);
+  res.set('Cache-Control', r.verified ? 'public, max-age=86400' : 'no-store').json(r);
 });
 // load the data each request needs (orders and messages only where they are used)
 const NEEDS_ORDERS = /^\/(api\/admin|api\/orders|api\/pay|order|pay)(\/|$)/, NEEDS_MESSAGES = /^\/(api\/admin|api\/contact)(\/|$)/;
@@ -484,15 +490,29 @@ async function confirmPayment(o) {
 app.post('/api/orders', async (req, res) => {
   const b = req.body || {};
   const c = b.customer || {};
+  const mobile = v => str(v, 20).replace(/\D/g, '').replace(/^(91|0)(?=\d{10}$)/, ''); // drop +91 / leading 0
   const customer = {
-    name: str(c.name, 80), phone: str(c.phone, 15).replace(/[^\d+]/g, ''), email: str(c.email, 120),
-    address: str(c.address, 300), city: str(c.city, 60), state: str(c.state, 60), pincode: str(c.pincode, 6), note: str(c.note, 300)
+    name: str(c.name, 80), phone: mobile(c.phone), altPhone: mobile(c.altPhone), email: str(c.email, 120),
+    line1: str(c.line1, 120), line2: str(c.line2, 120), landmark: str(c.landmark, 80),
+    city: str(c.city, 60), state: str(c.state, 60), pincode: str(c.pincode, 6), country: 'India',
+    addressType: ['Home', 'Work', 'Other'].includes(c.addressType) ? c.addressType : 'Home', note: str(c.note, 300)
   };
-  if (!customer.name) return res.status(400).json({ error: 'Please enter your name.' });
-  if (!/^\+?\d{10,13}$/.test(customer.phone)) return res.status(400).json({ error: 'Please enter a valid phone number.' });
-  if (customer.email && !/^\S+@\S+\.\S+$/.test(customer.email)) return res.status(400).json({ error: 'Please enter a valid email.' });
-  if (!customer.address || !customer.city || !customer.state) return res.status(400).json({ error: 'Please enter your full address.' });
-  if (!/^\d{6}$/.test(customer.pincode)) return res.status(400).json({ error: 'Please enter a valid 6-digit pincode.' });
+  // one-line address, used wherever the order is shown
+  customer.address = [customer.line1, customer.line2, customer.landmark && 'Near ' + customer.landmark.replace(/^near\s+/i, '')].filter(Boolean).join(', ');
+  const bad = (msg, field) => res.status(400).json({ error: msg, field });
+  if (str(c.country, 40) && str(c.country, 40) !== 'India') return bad('Sorry, we deliver only within India right now.', 'country');
+  if (customer.name.replace(/[^\p{L}]/gu, '').length < 3) return bad('Please enter your full name.', 'name');
+  if (!/^[6-9]\d{9}$/.test(customer.phone)) return bad('Please enter a valid 10-digit mobile number.', 'phone');
+  if (customer.altPhone && !/^[6-9]\d{9}$/.test(customer.altPhone)) return bad('The alternate mobile number is not valid.', 'altPhone');
+  if (customer.email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(customer.email)) return bad('Please enter a valid email.', 'email');
+  if (customer.line1.length < 3) return bad('Please enter your house / flat number and building.', 'line1');
+  if (customer.line2.length < 3) return bad('Please enter your area, street or village.', 'line2');
+  if (customer.city.length < 2) return bad('Please enter your town or city.', 'city');
+  if (!pincode.STATES.includes(customer.state)) return bad('Please select your state.', 'state');
+  const pin = await pincode.lookup(customer.pincode, 3500);
+  if (!pin.valid) return bad(pin.error, 'pincode');
+  if (!pin.states.includes(customer.state)) return bad(`PIN code ${customer.pincode} is not in ${customer.state}. Please check the PIN code and state.`, 'pincode');
+  customer.pinVerified = !!pin.verified;
 
   const methods = paymentMethods();
   if (!methods.length) return res.status(400).json({ error: 'Online ordering is paused right now. Please contact us.' });

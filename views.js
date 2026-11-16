@@ -1,3 +1,4 @@
+const { STATES } = require('./pincode');
 // Server-rendered storefront pages. All dynamic text goes through esc().
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = n => '₹' + Number(n || 0).toLocaleString('en-IN');
@@ -355,21 +356,39 @@ function cart(db) {
 }
 
 function checkout(db, methods = []) {
-  const f = (name, label, attrs = '', cls = '') => `<label class="field ${cls}"><span>${label}</span><input name="${name}" ${attrs}></label>`;
+  // every field carries its own error line; `hint` is the small help text under it
+  const f = (name, label, attrs = '', { cls = '', hint = '', prefix = '' } = {}) => `<label class="field ${cls}" data-field="${name}"><span>${label}</span>${prefix ? `<div class="with-prefix"><b>${prefix}</b><input name="${name}" ${attrs}></div>` : `<input name="${name}" ${attrs}>`}${hint ? `<small class="hint">${hint}</small>` : ''}<small class="err" hidden></small></label>`;
   const body = `
 <section class="page-head"><div class="wrap"><h1>Checkout</h1></div></section>
 <section class="wrap pad checkout">
   <form id="checkoutForm" class="panel" novalidate>
-    <h3>Delivery details</h3>
+    <h3>Contact details</h3>
     <div class="fields">
-      ${f('name', 'Full name *', 'required autocomplete="name" maxlength="80"')}
-      ${f('phone', 'Mobile number *', 'required type="tel" inputmode="tel" autocomplete="tel" maxlength="13"')}
-      ${f('email', 'Email (optional)', 'type="email" autocomplete="email" maxlength="120"', 'full')}
-      <label class="field full"><span>Full address *</span><textarea name="address" rows="3" required maxlength="300" autocomplete="street-address"></textarea></label>
-      ${f('city', 'City *', 'required maxlength="60" autocomplete="address-level2"')}
-      ${f('state', 'State *', 'required maxlength="60" autocomplete="address-level1"')}
-      ${f('pincode', 'Pincode *', 'required inputmode="numeric" maxlength="6" autocomplete="postal-code"')}
-      ${f('note', 'Order note (optional)', 'maxlength="300"')}
+      ${f('name', 'Full name *', 'required autocomplete="name" maxlength="80" placeholder="First and last name"')}
+      ${f('phone', 'Mobile number *', 'required type="tel" inputmode="numeric" autocomplete="tel-national" maxlength="10" placeholder="10-digit mobile number"', { prefix: '+91', hint: 'For delivery updates and the courier’s call.' })}
+      ${f('email', 'Email (optional)', 'type="email" autocomplete="email" maxlength="120" placeholder="For your order confirmation"', { cls: 'full' })}
+    </div>
+    <h3>Delivery address</h3>
+    <p class="ship-note">📦 We currently deliver across India only.</p>
+    <div class="fields">
+      <label class="field" data-field="country"><span>Country / Region *</span><select name="country" autocomplete="country-name"><option value="India" selected>India</option></select><small class="err" hidden></small></label>
+      <label class="field" data-field="pincode"><span>PIN code *</span><input name="pincode" required inputmode="numeric" maxlength="6" autocomplete="postal-code" placeholder="6-digit PIN code"><small class="hint" id="pinStatus">We fill in your city and state from the PIN code.</small><small class="err" hidden></small></label>
+      ${f('line1', 'Flat, House no., Building, Company *', 'required maxlength="120" autocomplete="address-line1"', { cls: 'full' })}
+      ${f('line2', 'Area, Street, Sector, Village *', 'required maxlength="120" autocomplete="address-line2" list="pinAreas"', { cls: 'full' })}
+      <datalist id="pinAreas"></datalist>
+      ${f('landmark', 'Landmark (optional)', 'maxlength="80" placeholder="E.g. near Apollo Hospital"', { cls: 'full' })}
+      ${f('city', 'Town / City *', 'required maxlength="60" autocomplete="address-level2"')}
+      <label class="field" data-field="state"><span>State / Union Territory *</span><select name="state" required autocomplete="address-level1"><option value="">Select state</option>${STATES.map(s => `<option>${esc(s)}</option>`).join('')}</select><small class="err" hidden></small></label>
+      <div class="field full" data-field="addressType"><span>Address type</span>
+        <div class="chips">
+          <label><input type="radio" name="addressType" value="Home" checked><i>🏠 Home <em>(all-day delivery)</em></i></label>
+          <label><input type="radio" name="addressType" value="Work"><i>🏢 Work <em>(10 am – 6 pm)</em></i></label>
+          <label><input type="radio" name="addressType" value="Other"><i>Other</i></label>
+        </div>
+      </div>
+      ${f('altPhone', 'Alternate mobile (optional)', 'type="tel" inputmode="numeric" maxlength="10" placeholder="If we cannot reach you"', { prefix: '+91' })}
+      ${f('note', 'Delivery instructions (optional)', 'maxlength="300" placeholder="E.g. leave with security"')}
+      <label class="check full"><input type="checkbox" id="saveAddress" checked> <span>Save these details on this device for next time</span></label>
     </div>
     <h3>Payment</h3>
     ${methods.length ? methods.map((m, i) => `<label class="pay-opt"><input type="radio" name="method" value="${esc(m.id)}"${i ? '' : ' checked'}> <span><b>${esc(m.label)}${db.settings.prepaidPercent > 0 && m.id !== 'cod' ? ` <em class="save">Extra ${db.settings.prepaidPercent}% off</em>` : ''}</b><small>${esc(m.hint)}</small></span></label>`).join('') : '<p class="form-error">Ordering is paused right now. Please contact us.</p>'}
@@ -390,7 +409,7 @@ function orderPlaced(db, o) {
       <tr><td>Shipping</td><td>${o.shipping ? money(o.shipping) : 'Free'}</td></tr>
       <tr class="total"><td>Total (${esc(o.payment)})</td><td>${money(o.total)}</td></tr>
     </table>
-    <p class="meta">Deliver to: ${esc(c.address)}, ${esc(c.city)}, ${esc(c.state)} – ${esc(c.pincode)}</p>
+    <p class="meta">Deliver to: ${esc(c.name)}, ${esc(c.address)}, ${esc(c.city)}, ${esc(c.state)} – ${esc(c.pincode)}${c.country ? ', ' + esc(c.country) : ''} · ${esc(c.phone)}</p>
   </div>`;
   // online payment started but not completed
   if (o.status === 'pending') {

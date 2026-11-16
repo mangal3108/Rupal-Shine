@@ -31,7 +31,7 @@
   async function post(url, body) {
     const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.error || 'Something went wrong. Please try again.');
+    if (!r.ok) throw Object.assign(new Error(data.error || 'Something went wrong. Please try again.'), { field: data.field });
     return data;
   }
 
@@ -206,10 +206,86 @@
     renderSummary();
     wireCoupon(summary, renderSummary);
     form.addEventListener('change', e => { if (e.target.name === 'method') renderSummary(); }); // online-payment offer changes the total
+
+    /* ----- delivery address: field checks, PIN code lookup, saved details ----- */
+    const ADDRESS = 'rs_address';
+    const el = name => form.elements[name];
+    const val = name => String(el(name).value || '').trim();
+    const digits = v => String(v).replace(/\D/g, '').replace(/^(91|0)(?=\d{10}$)/, '');
+    function fieldError(name, msg) {
+      const box = $(`[data-field="${name}"]`, form); if (!box) return;
+      const err = $('.err', box);
+      box.classList.toggle('bad', !!msg);
+      if (err) { err.textContent = msg || ''; err.hidden = !msg; }
+    }
+    const pinStatus = $('#pinStatus');
+    let pinInfo = null; // last answer from the PIN code checker
+    const rules = {
+      name: v => v.replace(/[^\p{L}]/gu, '').length < 3 && 'Please enter your full name.',
+      phone: v => !/^[6-9]\d{9}$/.test(digits(v)) && 'Enter a valid 10-digit mobile number.',
+      altPhone: v => v && !/^[6-9]\d{9}$/.test(digits(v)) && 'Enter a valid 10-digit mobile number.',
+      email: v => v && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v) && 'Enter a valid email address.',
+      pincode: v => !/^[1-9]\d{5}$/.test(v) ? 'Enter your 6-digit PIN code.' : pinInfo && pinInfo.pin === v && !pinInfo.valid && pinInfo.error,
+      line1: v => v.length < 3 && 'Enter your house / flat number and building.',
+      line2: v => v.length < 3 && 'Enter your area, street or village.',
+      city: v => v.length < 2 && 'Enter your town or city.',
+      state: v => !v ? 'Select your state.' : pinInfo && pinInfo.valid && pinInfo.pin === val('pincode') && !pinInfo.states.includes(v) && `PIN code ${pinInfo.pin} is not in ${v}.`
+    };
+    const check = name => { const msg = rules[name](val(name)) || ''; fieldError(name, msg); return !msg; };
+
+    function setPinStatus(text, kind) { pinStatus.textContent = text; pinStatus.className = 'hint' + (kind ? ' ' + kind : ''); }
+    async function lookupPin(fill) {
+      const pin = val('pincode');
+      if (!/^\d{6}$/.test(pin)) { pinInfo = null; setPinStatus('We fill in your city and state from the PIN code.'); return; }
+      if (!pinInfo || pinInfo.pin !== pin) {
+        setPinStatus('Checking PIN code…');
+        try { pinInfo = await fetch('/api/pincode/' + pin).then(r => r.json()); } catch (e) { pinInfo = null; setPinStatus(''); return; }
+        if (val('pincode') !== pin) return; // the customer kept typing
+      }
+      if (!pinInfo.valid) { setPinStatus(''); fieldError('pincode', pinInfo.error); return; }
+      fieldError('pincode', '');
+      if (fill) {
+        if (pinInfo.state) el('state').value = pinInfo.state;
+        if (pinInfo.district) el('city').value = pinInfo.district;
+      }
+      $('#pinAreas').innerHTML = (pinInfo.areas || []).map(a => `<option value="${esc(a)}">`).join('');
+      setPinStatus(pinInfo.verified ? `✓ We deliver to ${[pinInfo.district, pinInfo.state].filter(Boolean).join(', ')}` : `✓ PIN code accepted${pinInfo.state ? ' — ' + pinInfo.state : ''}`, 'ok');
+      if (val('state')) check('state');
+      if (val('city')) check('city');
+    }
+
+    for (const name of ['phone', 'altPhone', 'pincode']) el(name).addEventListener('input', () => { el(name).value = el(name).value.replace(/\D/g, '').slice(0, name === 'pincode' ? 6 : 10); });
+    el('pincode').addEventListener('input', () => { if (val('pincode').length === 6) lookupPin(true); else { fieldError('pincode', ''); setPinStatus('We fill in your city and state from the PIN code.'); } });
+    form.addEventListener('focusout', e => { if (rules[e.target.name] && (val(e.target.name) || e.target.required)) check(e.target.name); });
+    form.addEventListener('input', e => { const box = e.target.closest('.field.bad'); if (box && rules[e.target.name] && !rules[e.target.name](val(e.target.name))) fieldError(e.target.name, ''); });
+    el('state').addEventListener('change', () => check('state'));
+
+    // details saved on this device from the last order
+    const saved = store.get(ADDRESS, null);
+    if (saved && typeof saved === 'object') {
+      for (const [k, v] of Object.entries(saved)) {
+        const input = el(k); if (!input || k === 'method') continue;
+        if (k === 'addressType') { const r = $(`input[name=addressType][value="${String(v).replace(/"/g, '')}"]`, form); if (r) r.checked = true; }
+        else input.value = v;
+      }
+      lookupPin(false);
+    }
+
     form.addEventListener('submit', async e => {
       e.preventDefault();
       showError('');
+      const failed = Object.keys(rules).filter(name => !check(name));
+      if (failed.length) {
+        const first = $(`[data-field="${failed[0]}"]`, form);
+        first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el(failed[0]).focus({ preventScroll: true });
+        showError('Please correct the highlighted details.');
+        return;
+      }
       const customer = Object.fromEntries(new FormData(form));
+      customer.phone = digits(customer.phone); customer.altPhone = digits(customer.altPhone || '');
+      if ($('#saveAddress').checked) { const keep = { ...customer }; delete keep.method; delete keep.note; store.set(ADDRESS, keep); }
+      else store.set(ADDRESS, null);
       const btn = $('button[type=submit]', form);
       btn.disabled = true; btn.textContent = 'Placing order…';
       const chosen = customer.method; delete customer.method;
@@ -237,7 +313,10 @@
           });
           rzp.open();
         }
-      } catch (err) { reset(err.message); renderSummary(); }
+      } catch (err) {
+        reset(err.message); renderSummary();
+        if (err.field && $(`[data-field="${err.field}"]`, form)) { fieldError(err.field, err.message); $(`[data-field="${err.field}"]`, form).scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+      }
     });
   }
 

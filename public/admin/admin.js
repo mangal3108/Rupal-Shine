@@ -199,7 +199,9 @@
             <dt>Customer</dt><dd>${esc(c.name)}</dd>
             <dt>Phone</dt><dd><a href="tel:${esc(c.phone)}">${esc(c.phone)}</a></dd>
             ${c.email ? `<dt>Email</dt><dd>${esc(c.email)}</dd>` : ''}
-            <dt>Address</dt><dd>${esc(c.address)}, ${esc(c.city)}, ${esc(c.state)} – ${esc(c.pincode)}</dd>
+            ${c.altPhone ? `<dt>Alternate phone</dt><dd><a href="tel:${esc(c.altPhone)}">${esc(c.altPhone)}</a></dd>` : ''}
+            <dt>Address${c.addressType ? ` (${esc(c.addressType)})` : ''}</dt><dd>${esc(c.address)}, ${esc(c.city)}, ${esc(c.state)} – ${esc(c.pincode)}${c.country ? ', ' + esc(c.country) : ''}</dd>
+            ${'pinVerified' in c ? `<dt>PIN code</dt><dd>${c.pinVerified ? '<span class="tag">Verified with India Post</span>' : '<span class="tag off">Not confirmed – please check</span>'}</dd>` : ''}
             ${c.note ? `<dt>Customer note</dt><dd>${esc(c.note)}</dd>` : ''}
             <dt>Payment</dt><dd>${esc(o.payment)} ${payTag(o)}</dd>
             ${o.gatewayRef ? `<dt>Gateway reference</dt><dd>${esc(o.gatewayPaymentId || o.gatewayRef)}</dd>` : ''}
