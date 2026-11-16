@@ -369,7 +369,7 @@ function checkout(db, methods = []) {
       ${f('email', 'Email (optional)', 'type="email" autocomplete="email" maxlength="120" placeholder="For your order confirmation"', { cls: 'full' })}
     </div>
     <h3>Delivery address</h3>
-    <p class="ship-note">📦 We currently deliver across India only.</p>
+    <p class="ship-note"><img src="/uploads/icon-truck.svg" alt="" width="22" height="22"> We currently deliver across India only.</p>
     <div class="fields">
       <label class="field" data-field="country"><span>Country / Region *</span><select name="country" autocomplete="country-name"><option value="India" selected>India</option></select><small class="err" hidden></small></label>
       <label class="field" data-field="pincode"><span>PIN code *</span><input name="pincode" required inputmode="numeric" maxlength="6" autocomplete="postal-code" placeholder="6-digit PIN code"><small class="hint" id="pinStatus">We fill in your city and state from the PIN code.</small><small class="err" hidden></small></label>
@@ -381,8 +381,8 @@ function checkout(db, methods = []) {
       <label class="field" data-field="state"><span>State / Union Territory *</span><select name="state" required autocomplete="address-level1"><option value="">Select state</option>${STATES.map(s => `<option>${esc(s)}</option>`).join('')}</select><small class="err" hidden></small></label>
       <div class="field full" data-field="addressType"><span>Address type</span>
         <div class="chips">
-          <label><input type="radio" name="addressType" value="Home" checked><i>🏠 Home <em>(all-day delivery)</em></i></label>
-          <label><input type="radio" name="addressType" value="Work"><i>🏢 Work <em>(10 am – 6 pm)</em></i></label>
+          <label><input type="radio" name="addressType" value="Home" checked><i><img src="/uploads/icon-home.svg" alt="" width="22" height="22"> Home <em>(all-day delivery)</em></i></label>
+          <label><input type="radio" name="addressType" value="Work"><i><img src="/uploads/icon-work.svg" alt="" width="22" height="22"> Work <em>(10 am – 6 pm)</em></i></label>
           <label><input type="radio" name="addressType" value="Other"><i>Other</i></label>
         </div>
       </div>
