@@ -115,10 +115,16 @@
     });
     el.addEventListener('change', async e => {
       if (e.target.type !== 'file' || !e.target.files.length) return;
-      const fd = new FormData();
-      [...e.target.files].forEach(f => fd.append('images', f));
-      try { const r = await api('POST', '/upload', fd); if (multiple) images.push(...r.urls); else images.splice(0, images.length, r.urls[0]); draw(); }
-      catch (ex) { fail(ex); }
+      // one image per request keeps each upload under the host's size limit
+      try {
+        for (const f of [...e.target.files]) {
+          if (f.size > 4 * 1024 * 1024) throw new Error(`“${f.name}” is larger than 4 MB. Please use a smaller image.`);
+          const fd = new FormData(); fd.append('images', f);
+          const r = await api('POST', '/upload', fd);
+          if (multiple) images.push(...r.urls); else images.splice(0, images.length, r.urls[0]);
+          draw();
+        }
+      } catch (ex) { fail(ex); draw(); }
     });
     draw();
   }
@@ -468,7 +474,7 @@
         ${field('Size / net quantity', 'size', p?.size, { attrs: 'placeholder="100 ml"' })}
         ${field('Category', 'category', p?.category, { attrs: 'placeholder="Hair Oil"' })}
         ${field('Link name (optional)', 'slug', p?.slug, { hint: 'Used in the product page address.' })}
-        <div class="field full"><span>Images (the first is the main image; the first 3 turn in the home page 3D viewer)</span><div class="images" id="imgPick"></div><small>JPG, PNG or WEBP, up to 5 MB each.</small></div>
+        <div class="field full"><span>Images (the first is the main image; the first 3 turn in the home page 3D viewer)</span><div class="images" id="imgPick"></div><small>JPG, PNG or WEBP, up to 4 MB each.</small></div>
         ${area('Short description', 'shortDesc', p?.shortDesc, { rows: 2 })}
         ${area('Full description', 'description', p?.description, { rows: 5, hint: 'Leave an empty line between paragraphs.' })}
         <div class="field full"><span>Ingredients (photo + name)</span><div id="ingList" class="ing-list"></div><small>Click a circle to upload a photo of the ingredient. Square photos work best.</small></div>

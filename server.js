@@ -1,20 +1,18 @@
 // Rupali Shine — storefront + admin CMS
 // Run:  npm start   →  http://localhost:3000   (admin: /admin)
+// Needs MONGODB_URI (in a .env file locally, or in the host's environment variables).
+const path = require('path');
+const fs = require('fs');
+try { process.loadEnvFile(path.join(__dirname, '.env')); } catch (e) { /* no .env file: settings come from the host's environment */ }
 const express = require('express');
 const multer = require('multer');
 const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
 const views = require('./views');
+const { db, middleware: storeMiddleware, stockMoved, nextOrderNumber, saveUpload, getUpload, ALL_LISTS } = require('./store');
 
 const PORT = process.env.PORT || 3000;
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
-const DB_FILE = path.join(DATA_DIR, 'db.json');
-const UPLOAD_DIR = path.join(__dirname, 'public', 'uploads');
-fs.mkdirSync(DATA_DIR, { recursive: true });
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-/* ---------------- data store (JSON file) ---------------- */
+/* ---------------- starter data & upgrades (the data itself lives in MongoDB — see store.js) ---------------- */
 const defaultPayments = () => ({
   razorpay: { enabled: false, keyId: '', keySecret: '' },
   stripe: { enabled: false, secretKey: '' },
@@ -24,7 +22,7 @@ const ING_IMAGES = [['jatamansi', 'jatamansi'], ['brahmi', 'brahmi'], ['methi', 
 function defaultIngredientImage(name) {
   const hit = ING_IMAGES.find(([k]) => name.toLowerCase().includes(k));
   const file = hit && `ing-${hit[1]}.webp`;
-  return file && fs.existsSync(path.join(UPLOAD_DIR, file)) ? '/uploads/' + file : '';
+  return file ? '/uploads/' + file : '';
 }
 const creditsPage = () => ({
   id: crypto.randomUUID(), slug: 'image-credits', title: 'Image Credits', showInMenu: false, showInFooter: true,
@@ -41,7 +39,7 @@ const creditsPage = () => ({
   ].join('\n') + '\n\nAll photographs are available at commons.wikimedia.org and have been cropped for display.'
 });
 
-// bring an older db.json up to the current shape
+// bring older data up to the current shape
 function migrate() {
   if ((db.version || 1) >= 2) return;
   for (const p of db.products) {
@@ -52,10 +50,9 @@ function migrate() {
     });
   }
   db.settings.payments = db.settings.payments || defaultPayments();
-  if (!db.settings.logoImage && fs.existsSync(path.join(UPLOAD_DIR, 'rupali-logo.png'))) db.settings.logoImage = '/uploads/rupali-logo.png';
+  if (!db.settings.logoImage) db.settings.logoImage = '/uploads/rupali-logo.png';
   if (!db.pages.some(p => p.slug === 'image-credits')) db.pages.push(creditsPage());
   db.version = 2;
-  save();
 }
 
 function seed() {
@@ -121,16 +118,16 @@ function seed() {
   };
 }
 
-let db;
-if (fs.existsSync(DB_FILE)) db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-else { db = seed(); save(); }
-
-function save() {
-  const tmp = DB_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(db, null, 2));
-  fs.renameSync(tmp, DB_FILE);
+// first run: start from the old local data file if there is one (so nothing is lost when moving to MongoDB)
+function firstData() {
+  const file = path.join(__dirname, 'data', 'db.json');
+  let data;
+  try { data = JSON.parse(fs.readFileSync(file, 'utf8')); console.log('Importing existing store data from data/db.json into MongoDB'); }
+  catch (e) { data = seed(); }
+  return data;
 }
-migrate();
+const save = () => {}; // changes are written to MongoDB automatically when the response is sent
+
 const HOME_DEFAULTS = {
   statsLines: '9: Powerful herbs\n100%: Natural\n100%: Handmade',
   journeyKicker: 'From nature to your hair',
@@ -142,6 +139,10 @@ const HOME_DEFAULTS = {
     'Your Hair Ritual: Massage, leave on, wash — for stronger, thicker, healthier hair.'
   ].join('\n')
 };
+// runs at every server start inside a database context: upgrades old data and fills in new settings
+function prepare() {
+migrate();
+if (!db.secret) db.secret = crypto.randomBytes(32).toString('hex'); // signs admin login cookies
 for (const k in HOME_DEFAULTS) if (db.settings[k] === undefined) db.settings[k] = HOME_DEFAULTS[k];
 // put the three bottle views first so the home page 3D viewer spins front → back
 for (const p of db.products) {
@@ -150,6 +151,7 @@ for (const p of db.products) {
 }
 db.spinOrdered = true;
 db.coupons = db.coupons || [];
+}
 const STORY_TEXT = 'Long before there was a label or a bottle, there was my mother, making this oil with her own hands. Jatamansi, brahmi, amla, bhringraj, hibiscus — every herb in it was her choice.\n\nShe is no longer with us. But her recipe is, and so is the care she put into it. I started Rupali Shine so that her oil would not end with her — so that it could reach more homes than she ever could.\n\nHer picture is on every bottle, because every bottle is still hers.';
 const STORY_DEFAULTS = {
   storyKicker: 'Our Story',
@@ -157,8 +159,9 @@ const STORY_DEFAULTS = {
   storyText: STORY_TEXT,
   storySign: 'Her son, Founder of Rupali Shine',
   storyCaption: 'In loving memory',
-  storyImage: fs.existsSync(path.join(UPLOAD_DIR, 'rupali-mother.webp')) ? '/uploads/rupali-mother.webp' : ''
+  storyImage: '/uploads/rupali-mother.webp'
 };
+function prepareStory() {
 for (const k in STORY_DEFAULTS) if (db.settings[k] === undefined) db.settings[k] = STORY_DEFAULTS[k];
 // first run after the story was added: tell it on the About page too (only if that page is still the starter text)
 const aboutPage = db.pages.find(p => p.slug === 'about');
@@ -168,7 +171,7 @@ if (!db.storyAdded && aboutPage && aboutPage.content.startsWith('Rupali Shine is
 }
 db.storyAdded = true;
 for (const [k, v] of Object.entries({ bulkTiers: '', prepaidPercent: 0, trustLines: '100% Natural\n100% Handmade\nMade in India' })) if (db.settings[k] === undefined) db.settings[k] = v;
-save();
+}
 
 /* ---------------- helpers ---------------- */
 const str = (v, max = 500) => String(v ?? '').trim().slice(0, max);
@@ -207,26 +210,34 @@ app.use(express.static(path.join(__dirname, 'public'), {
   index: false,
   setHeaders: (res, file) => res.set('Cache-Control', file.includes(path.sep + 'uploads' + path.sep) ? 'public, max-age=604800' : 'no-cache')
 }));
+// images uploaded from the admin panel are kept in MongoDB
+app.get('/uploads/:name', async (req, res, next) => {
+  if (!/^[\w.-]+$/.test(req.params.name)) return next();
+  try {
+    const file = await getUpload(req.params.name);
+    if (!file) return res.status(404).type('text').send('Not found');
+    res.set('Cache-Control', 'public, max-age=31536000, immutable').type(file.type).send(file.data);
+  } catch (e) { res.status(503).type('text').send('Unavailable'); }
+});
+// load the data each request needs (orders and messages only where they are used)
+const NEEDS_ORDERS = /^\/(api\/admin|api\/orders|api\/pay|order|pay)(\/|$)/, NEEDS_MESSAGES = /^\/(api\/admin|api\/contact)(\/|$)/;
+app.use(storeMiddleware(firstData, () => { prepare(); prepareStory(); }, p =>
+  ALL_LISTS.filter(k => k === 'orders' ? NEEDS_ORDERS.test(p) : k === 'messages' ? NEEDS_MESSAGES.test(p) : true)));
 
 /* ---------------- admin sessions ---------------- */
-const sessions = new Map(); // token -> expiry
+// The login cookie is "<expiry>.<signature>". It is signed with a secret kept in the database and
+// tied to the current password, so it works across serverless instances and stops working when the password changes.
 const SESSION_MS = 1000 * 60 * 60 * 12;
-function getToken(req) {
-  const m = /(?:^|;\s*)rs_admin=([a-f0-9]{64})/.exec(req.headers.cookie || '');
-  return m ? m[1] : null;
-}
+const sessionSig = exp => crypto.createHmac('sha256', db.secret).update(exp + '|' + db.admin.hash).digest('hex');
 function isAuthed(req) {
-  const t = getToken(req);
-  const exp = t && sessions.get(t);
-  if (!exp) return false;
-  if (exp < Date.now()) { sessions.delete(t); return false; }
-  return true;
+  const m = /(?:^|;\s*)rs_admin=(\d{13})\.([a-f0-9]{64})/.exec(req.headers.cookie || '');
+  if (!m || !db.admin || +m[1] < Date.now()) return false;
+  return crypto.timingSafeEqual(Buffer.from(m[2]), Buffer.from(sessionSig(m[1])));
 }
 function startSession(req, res) {
-  const token = crypto.randomBytes(32).toString('hex');
-  sessions.set(token, Date.now() + SESSION_MS);
+  const exp = String(Date.now() + SESSION_MS);
   const secure = req.secure || req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
-  res.set('Set-Cookie', `rs_admin=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${secure}`);
+  res.set('Set-Cookie', `rs_admin=${exp}.${sessionSig(exp)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${secure}`);
 }
 const requireAdmin = (req, res, next) => isAuthed(req) ? next() : res.status(401).json({ error: 'Please log in.' });
 
@@ -272,7 +283,7 @@ app.get('/page/:slug', (req, res) => {
   if (!pg) return send(res, views.notFound(db), 404);
   send(res, views.page(db, pg));
 });
-app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin', 'index.html')));
+app.get('/admin', (req, res) => send(res, views.adminPage()));
 
 /* ---------------- public API ---------------- */
 const publicProduct = p => ({ id: p.id, slug: p.slug, name: p.name, size: p.size, price: p.price, mrp: p.mrp, stock: p.stock, image: p.images[0] || '' });
@@ -449,12 +460,12 @@ async function isPaidAtGateway(order) {
 
 function takeStock(o) {
   if (o.stockTaken) return;
-  o.items.forEach(it => { const p = db.products.find(x => x.id === it.id); if (p) p.stock = Math.max(0, p.stock - it.qty); });
+  o.items.forEach(it => { const p = db.products.find(x => x.id === it.id); if (p) { p.stock -= it.qty; stockMoved(p.id, -it.qty); } });
   o.stockTaken = true;
 }
 function returnStock(o) {
   if (!o.stockTaken) return;
-  o.items.forEach(it => { const p = db.products.find(x => x.id === it.id); if (p) p.stock += it.qty; });
+  o.items.forEach(it => { const p = db.products.find(x => x.id === it.id); if (p) { p.stock += it.qty; stockMoved(p.id, it.qty); } });
   o.stockTaken = false;
 }
 function markPaid(o) {
@@ -505,7 +516,7 @@ app.post('/api/orders', async (req, res) => {
   const order = {
     id: crypto.randomUUID(),
     key: crypto.randomBytes(16).toString('hex'),
-    number: 'RS-' + (++db.seq.order),
+    number: 'RS-' + await nextOrderNumber(),
     createdAt: new Date().toISOString(),
     status: online ? 'pending' : 'new',
     gateway: method.id,
@@ -530,7 +541,6 @@ app.post('/api/orders', async (req, res) => {
     res.json({ ok: true, number: order.number, orderUrl: '/order/' + order.key, ...next });
   } catch (e) {
     console.error('Payment start failed:', e.message);
-    save(); // keeps the order number counter
     res.status(502).json({ error: 'Could not start the online payment. Please try again or choose another payment method.' });
   }
 });
@@ -597,7 +607,6 @@ app.post('/api/admin/login', (req, res) => {
 });
 
 app.post('/api/admin/logout', (req, res) => {
-  sessions.delete(getToken(req));
   res.set('Set-Cookie', 'rs_admin=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
   res.json({ ok: true });
 });
@@ -628,18 +637,24 @@ app.get('/api/admin/stats', (req, res) => {
 
 // uploads
 const EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' };
+// Vercel accepts request bodies up to about 4.5 MB, so images are uploaded one per request, 4 MB each
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: UPLOAD_DIR,
-    filename: (req, file, cb) => cb(null, Date.now().toString(36) + '-' + crypto.randomBytes(5).toString('hex') + EXT[file.mimetype])
-  }),
-  limits: { fileSize: 5 * 1024 * 1024, files: 10 },
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 4 * 1024 * 1024, files: 10 },
   fileFilter: (req, file, cb) => EXT[file.mimetype] ? cb(null, true) : cb(new Error('Only JPG, PNG, WEBP or GIF images are allowed.'))
 });
 app.post('/api/admin/upload', (req, res) => {
-  upload.array('images', 10)(req, res, err => {
-    if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'Each image must be under 5 MB.' : err.message });
-    res.json({ urls: (req.files || []).map(f => '/uploads/' + f.filename) });
+  upload.array('images', 10)(req, res, async err => {
+    if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'Each image must be under 4 MB.' : err.message });
+    try {
+      const urls = [];
+      for (const f of req.files || []) {
+        const name = Date.now().toString(36) + '-' + crypto.randomBytes(5).toString('hex') + EXT[f.mimetype];
+        await saveUpload(name, f.mimetype, f.buffer);
+        urls.push('/uploads/' + name);
+      }
+      res.json({ urls });
+    } catch (e) { console.error('Upload failed:', e.message); res.status(500).json({ error: 'Could not save the image. Please try again.' }); }
   });
 });
 
@@ -887,4 +902,5 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Something went wrong.' });
 });
 
-app.listen(PORT, () => console.log(`Rupali Shine running →  http://localhost:${PORT}   (admin: http://localhost:${PORT}/admin)`));
+module.exports = app; // Vercel runs the app from this export
+if (!process.env.VERCEL) app.listen(PORT, () => console.log(`Rupali Shine running →  http://localhost:${PORT}   (admin: http://localhost:${PORT}/admin)`));

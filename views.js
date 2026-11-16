@@ -452,4 +452,25 @@ function notFound(db) {
   return layout(db, 'Page not found', `<section class="wrap pad thanks"><h1>Page not found</h1><p class="lead">The page you are looking for does not exist.</p><a class="btn" href="/">Back to home</a></section>`);
 }
 
-module.exports = { home, shop, product, cart, checkout, orderPlaced, contact, page, notFound };
+// shell of the admin panel (the panel itself is public/admin/admin.js)
+function adminPage() {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Admin | Rupali Shine</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="${asset('/admin/admin.css')}">
+</head>
+<body>
+<div id="app"></div>
+<div id="modal" class="modal" hidden></div>
+<div id="toast" class="toast" hidden></div>
+<script src="${asset('/admin/admin.js')}"></script>
+</body>
+</html>`;
+}
+
+module.exports = { adminPage, home, shop, product, cart, checkout, orderPlaced, contact, page, notFound };
