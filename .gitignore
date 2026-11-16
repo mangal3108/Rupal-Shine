@@ -1,0 +1,9 @@
+# installed packages (run "npm install" to get them back)
+node_modules/
+
+# live store data: admin login, orders, customer details, payment gateway keys — never commit
+data/
+
+# local tooling
+.claude/
+*.log
