@@ -70,7 +70,7 @@
   }
 
   /* ---------- shell ---------- */
-  const NAV = [['dashboard', 'Dashboard'], ['products', 'Products'], ['orders', 'Orders'], ['reviews', 'Reviews'], ['offers', 'Offers & Coupons'], ['payments', 'Payments'], ['pages', 'Pages'], ['messages', 'Messages'], ['settings', 'Site Settings'], ['account', 'Account']];
+  const NAV = [['dashboard', 'Dashboard'], ['products', 'Products'], ['orders', 'Orders'], ['reviews', 'Reviews'], ['documents', 'Certificates'], ['offers', 'Offers & Coupons'], ['payments', 'Payments'], ['pages', 'Pages'], ['messages', 'Messages'], ['settings', 'Site Settings'], ['account', 'Account']];
   function shell() {
     app.innerHTML = `<div class="shell">
       <aside class="side">
@@ -169,7 +169,84 @@
     });
   }
 
+  /* ---------- certificates form ---------- */
+  function documentForm(d, done) {
+    const img = d && d.image ? [d.image] : [];
+    openModal(d ? 'Edit certificate' : 'Add a certificate', `<form id="docForm">
+      <p class="note">Describe each document exactly as it is. A pledge is not a certificate, a self-declaration is not issued by the government, and a private certificate is not a government licence — honest wording builds more trust than big claims.</p>
+      <div class="fields">
+        ${field('Certificate name', 'title', d && d.title, { full: true, attrs: 'required maxlength="100" placeholder="e.g. GMP Certificate of Compliance"' })}
+        <div class="field full"><span>Photo or scan of the certificate</span><div class="images" id="docPick"></div><small>JPG, PNG or WebP up to 4 MB. For a PDF, take a screenshot of the page.</small></div>
+        ${field('Type', 'kind', d && d.kind, { attrs: 'maxlength="60" list="docKinds" placeholder="e.g. Government registration"' })}
+        <datalist id="docKinds"><option value="Government registration"><option value="Government licence"><option value="Independent certification"><option value="Lab test report"><option value="Government scheme pledge"><option value="Self-declaration"></datalist>
+        ${field('Short badge text', 'badge', d && d.badge, { attrs: 'maxlength="40" placeholder="e.g. GMP certified"', hint: 'Shown on the home page and product page.' })}
+        ${field('Issued by', 'issuer', d && d.issuer, { full: true, attrs: 'maxlength="140"' })}
+        ${field('Certificate / registration number', 'number', d && d.number, { attrs: 'maxlength="60"' })}
+        ${field('Issue date', 'issued', d && d.issued, { type: 'date' })}
+        ${field('Valid until (optional)', 'validUntil', d && d.validUntil, { type: 'date', hint: 'Leave empty if it does not expire.' })}
+        ${area('What it means (shown to shoppers)', 'summary', d && d.summary, { rows: 3 })}
+        ${field('Verify link (optional)', 'verifyUrl', d && d.verifyUrl, { type: 'url', attrs: 'placeholder="https://"', hint: 'The issuer’s page where anyone can check it.' })}
+        ${field('How to verify (optional)', 'verifyHint', d && d.verifyHint, { attrs: 'maxlength="140" placeholder="e.g. Enter the Udyam number on the portal."' })}
+        ${area('Private note (only you see this)', 'note', d && d.note, { rows: 2 })}
+        <div class="field full checks">${check('Show on the website', 'published', d ? d.published : true)}${check('Also show on the home page and product page', 'featured', d ? d.featured : false)}</div>
+      </div><p class="error" hidden></p>
+      <div class="form-actions"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn">${d ? 'Save changes' : 'Add certificate'}</button></div>
+    </form>`);
+    imagePicker(modal.querySelector('#docPick'), img, { multiple: false });
+    modal.querySelector('#docForm').onsubmit = async e => {
+      e.preventDefault();
+      try {
+        const list = await api(d ? 'PUT' : 'POST', '/documents' + (d ? '/' + d.id : ''), { ...formData(e.target), image: img[0] || '' });
+        closeModal(); toast(d ? 'Certificate saved' : 'Certificate added'); done(list);
+      } catch (ex) { const er = modal.querySelector('.error'); er.textContent = ex.message; er.hidden = false; }
+    };
+  }
+
   const VIEWS = {
+    /* ---------- certificates ---------- */
+    async documents(main) {
+      let docs = await api('GET', '/documents');
+      const day = v => v ? new Date(v + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+      const expiring = d => d.validUntil && (Date.parse(d.validUntil) - Date.now()) < 60 * 864e5;
+      const draw = () => {
+        main.innerHTML = `<div class="top"><h1>Certificates</h1><div class="actions"><a class="btn ghost" href="/certificates" target="_blank" rel="noopener">View page ↗</a><button class="btn" data-new>+ Add certificate</button></div></div>
+          <div class="card"><p class="muted" style="margin:0">These appear on the <b>Certificates &amp; Registrations</b> page. Ticked “home page” ones also show as badges on the home page and under the Buy button. Use the arrows to change the order.</p></div>
+          <div class="doc-list">${docs.length ? docs.map((d, i) => `<article class="doc ${d.published ? '' : 'off'}">
+            <a class="doc-img" href="${esc(d.image)}" target="_blank" rel="noopener"><img src="${esc(d.thumb || d.image)}" alt=""></a>
+            <div class="doc-body">
+              <div class="rv-head">${d.published ? '<span class="tag">On website</span>' : '<span class="tag off">Hidden</span>'}${d.featured && d.published ? '<span class="tag gold">Home page</span>' : ''}${expiring(d) ? `<span class="tag new">${Date.parse(d.validUntil) < Date.now() ? 'Expired' : 'Expires soon'}</span>` : ''}${d.kind ? `<span class="muted">${esc(d.kind)}</span>` : ''}</div>
+              <h3>${esc(d.title)}</h3>
+              <p class="muted">${[d.issuer, d.number, d.issued && 'Issued ' + day(d.issued), d.validUntil && 'Valid until ' + day(d.validUntil)].filter(Boolean).map(esc).join(' · ')}</p>
+              ${d.note ? `<p class="doc-note">${esc(d.note)}</p>` : ''}
+              <div class="actions">
+                <button class="btn ghost sm" data-move="up" data-id="${esc(d.id)}"${i ? '' : ' disabled'} aria-label="Move up">↑</button><button class="btn ghost sm" data-move="down" data-id="${esc(d.id)}"${i < docs.length - 1 ? '' : ' disabled'} aria-label="Move down">↓</button>
+                <button class="btn ${d.published ? 'ghost' : ''} sm" data-pub="${esc(d.id)}">${d.published ? 'Hide' : 'Show on website'}</button>
+                ${d.published ? `<button class="btn ghost sm" data-feat="${esc(d.id)}">${d.featured ? 'Remove from home page' : 'Show on home page'}</button>` : ''}
+                <button class="btn ghost sm" data-edit="${esc(d.id)}">Edit</button><button class="btn danger sm" data-del="${esc(d.id)}">Delete</button>
+              </div>
+            </div>
+          </article>`).join('') : '<div class="card"><p class="empty">No certificates yet. Click “Add certificate” to upload one.</p></div>'}</div>`;
+      };
+      draw();
+      main.onclick = async e => {
+        const t = e.target.closest('button'); if (!t) return;
+        const id = t.dataset.id || t.dataset.edit || t.dataset.del || t.dataset.pub || t.dataset.feat;
+        const d = docs.find(x => x.id === id);
+        try {
+          if ('new' in t.dataset) return documentForm(null, l => { docs = l; draw(); });
+          if (t.dataset.edit) return documentForm(d, l => { docs = l; draw(); });
+          if (t.dataset.move) docs = await api('POST', `/documents/${id}/move`, { dir: t.dataset.move });
+          if (t.dataset.pub) {
+            if (!d.published && d.note && !confirm('Your note on this certificate:\n\n' + d.note + '\n\nShow it on the website anyway?')) return;
+            docs = await api('PUT', '/documents/' + id, { published: !d.published }); toast(d.published ? 'Hidden from website' : 'Now on the website');
+          }
+          if (t.dataset.feat) docs = await api('PUT', '/documents/' + id, { featured: !d.featured });
+          if (t.dataset.del && confirm('Delete this certificate?')) docs = await api('DELETE', '/documents/' + id);
+          draw();
+        } catch (ex) { fail(ex); }
+      };
+    },
+
     /* ---------- reviews ---------- */
     async reviews(main) {
       const { reviews, products } = await api('GET', '/reviews');

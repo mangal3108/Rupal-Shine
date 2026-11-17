@@ -389,6 +389,26 @@
     $('.wa-btn').addEventListener('click', () => { bubble.hidden = true; });
   }
 
+  /* ---------- certificates: full-size viewer ---------- */
+  const lb = $('[data-lightbox-box]');
+  if (lb) {
+    let last = null;
+    const close = () => { lb.hidden = true; document.body.classList.remove('menu-open'); if (last) last.focus({ preventScroll: true }); };
+    document.addEventListener('click', e => {
+      const a = e.target.closest('[data-lightbox]');
+      if (a) {
+        e.preventDefault(); last = a;
+        $('img', lb).src = a.getAttribute('href'); $('img', lb).alt = a.dataset.caption || '';
+        $('figcaption', lb).textContent = a.dataset.caption || '';
+        lb.hidden = false; document.body.classList.add('menu-open');
+        $('[data-lightbox-close]', lb).focus({ preventScroll: true });
+        return;
+      }
+      if (!lb.hidden && (e.target === lb || e.target.closest('[data-lightbox-close]'))) close();
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && !lb.hidden) close(); });
+  }
+
   /* ---------- video section slideshow (shown until a video link is added) ---------- */
   const montage = $('[data-montage]');
   if (montage) {

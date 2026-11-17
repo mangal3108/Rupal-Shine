@@ -72,7 +72,7 @@ function layout(db, title, body, { desc = '', path = '', about = '' } = {}) {
   const s = db.settings;
   const menuPages = db.pages.filter(p => p.showInMenu);
   const footPages = db.pages.filter(p => p.showInFooter);
-  const nav = [['/', 'Home'], ['/shop', 'Shop'], ...menuPages.map(p => ['/page/' + p.slug, p.title]), ['/contact', 'Contact']];
+  const nav = [['/', 'Home'], ['/shop', 'Shop'], ...menuPages.map(p => ['/page/' + p.slug, p.title]), ...(publishedDocs(db).length ? [['/certificates', 'Certificates']] : []), ['/contact', 'Contact']];
   const wa = waLink(s);
   const social = [['instagram', 'Instagram'], ['facebook', 'Facebook'], ['youtube', 'YouTube']].filter(([k]) => s[k]);
   return `<!doctype html>
@@ -127,7 +127,7 @@ ${s.announcement ? `<div class="announce"><span>${esc(s.announcement)}</span></d
     </div>
     <div>
       <h4>Shop</h4>
-      <a href="/shop">All Products</a><a href="/cart">Cart</a><a href="/contact">Contact Us</a>
+      <a href="/shop">All Products</a><a href="/cart">Cart</a>${publishedDocs(db).length ? '<a href="/certificates">Certificates &amp; registrations</a>' : ''}<a href="/contact">Contact Us</a>
     </div>
     <div>
       <h4>Information</h4>
@@ -292,6 +292,8 @@ ${s.storyText ? `<section class="story" id="story">
   </div>
 </section>
 <ul class="facts" aria-label="Good to know">${FACTS.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+
+${certStrip(db)}
 
 ${videoBlock(s, f)}
 
@@ -551,6 +553,7 @@ function product(db, p, related, methods = [], offers = {}, rv = { list: [], sum
     ${s.freeShippingAbove > 0 ? `<p class="assure">Free delivery on orders above ${money(s.freeShippingAbove)}.</p>` : !s.shippingFee ? '<p class="assure">Free delivery on every order.</p>' : ''}
 
     ${trust.length ? `<ul class="trust">${trust.map(t => `<li>${TRUST_ICON}${esc(t)}</li>`).join('')}</ul>` : ''}
+    ${certLink(db)}
     ${p.benefits.length ? `<div class="block"><h3>Benefits</h3><ul class="tick-list">${p.benefits.map(b => `<li>${ICON.leaf}${esc(b)}</li>`).join('')}</ul></div>` : ''}
   </div>
 </section>
@@ -653,6 +656,73 @@ function orderPlaced(db, o) {
   return layout(db, 'Order placed', body);
 }
 
+/* ---------------- certificates & registrations ---------------- */
+const publishedDocs = db => (db.documents || []).filter(d => d.published && d.image);
+const docDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+const SEAL = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="6"/><path d="M9 14.5 7.5 22l4.5-2.5 4.5 2.5L15 14.5"/><path d="m9.5 9 1.8 1.8L14.8 7.5"/></svg>';
+
+// home page: small "certified & registered" row
+function certStrip(db) {
+  const docs = publishedDocs(db).filter(d => d.featured);
+  if (!docs.length) return '';
+  return `<section class="cert-strip">
+  <div class="wrap">
+    <div class="sec-head reveal"><span class="kicker">Certified &amp; registered</span><h2>Made with care — and on record</h2></div>
+    <div class="cert-row reveal">
+      ${docs.map(d => `<a class="cert-mini" href="/certificates#${esc(d.id)}">
+        <span class="cm-img"><img src="${esc(d.thumb || d.image)}" alt="${esc(d.title)}" loading="lazy"></span>
+        <span class="cm-text"><b>${SEAL}${esc(d.badge || d.title)}</b><small>${esc(d.issuer)}</small></span>
+      </a>`).join('')}
+    </div>
+    <p class="rv-all"><a class="link" href="/certificates">See all certificates ${ICON.arrow}</a></p>
+  </div>
+</section>`;
+}
+// product page: one line under the trust points
+function certLink(db) {
+  const docs = publishedDocs(db).filter(d => d.featured && d.badge);
+  return docs.length ? `<a class="cert-link" href="/certificates">${SEAL}<span>${docs.map(d => esc(d.badge)).join(' · ')}</span><em>View certificates</em></a>` : '';
+}
+
+function certificates(db) {
+  const docs = publishedDocs(db);
+  const body = `
+<section class="page-head certs-head"><div class="wrap">
+  <span class="kicker">Trust &amp; transparency</span>
+  <h1>Certificates &amp; Registrations</h1>
+  <p class="lead">Every document below is shown exactly as it was issued. Tap one to see it in full size, or check it yourself on the issuer’s website.</p>
+</div></section>
+<section class="wrap pad">
+  ${docs.length ? `<div class="cert-grid">
+    ${docs.map((d, i) => `<article class="cert-card reveal" id="${esc(d.id)}" style="--d:${i}">
+      <a class="cert-img" href="${esc(d.image)}" data-lightbox data-caption="${esc(d.title)}" aria-label="Open ${esc(d.title)} full size">
+        <img src="${esc(d.thumb || d.image)}" alt="${esc(d.title)}" loading="${i < 2 ? 'eager' : 'lazy'}">
+        <span class="cert-zoom">Tap to view full size</span>
+      </a>
+      <div class="cert-body">
+        ${d.kind ? `<span class="cert-kind">${esc(d.kind)}</span>` : ''}
+        <h2>${esc(d.title)}</h2>
+        ${d.issuer ? `<p class="cert-issuer">Issued by ${esc(d.issuer)}</p>` : ''}
+        <dl class="cert-facts">
+          ${d.number ? `<div><dt>Number</dt><dd><code>${esc(d.number)}</code></dd></div>` : ''}
+          ${d.issued ? `<div><dt>Issued</dt><dd>${docDate(d.issued)}</dd></div>` : ''}
+          ${d.validUntil ? `<div><dt>Valid until</dt><dd>${docDate(d.validUntil)}</dd></div>` : ''}
+        </dl>
+        ${d.summary ? `<p class="cert-summary">${esc(d.summary)}</p>` : ''}
+        ${d.verifyUrl ? `<div class="cert-verify"><a class="btn btn-outline btn-sm" href="${esc(d.verifyUrl)}" target="_blank" rel="noopener nofollow">Verify on issuer’s site ↗</a>${d.verifyHint ? `<small>${esc(d.verifyHint)}</small>` : ''}</div>` : ''}
+      </div>
+    </article>`).join('')}
+  </div>
+  <p class="cert-foot">Questions about any certificate? <a href="/contact">Contact us</a> — we are happy to share more details.</p>`
+  : '<p class="empty">Certificates will appear here soon.</p>'}
+</section>
+<div class="lightbox" data-lightbox-box hidden role="dialog" aria-modal="true" aria-label="Certificate">
+  <button type="button" class="lb-close" data-lightbox-close aria-label="Close">${ICON.close}</button>
+  <figure><img alt=""><figcaption></figcaption></figure>
+</div>`;
+  return layout(db, 'Certificates & Registrations', body, { path: '/certificates', desc: `${db.settings.siteName} certificates and registrations: ${docs.map(d => d.title).join(', ')}.` });
+}
+
 function contact(db) {
   const s = db.settings;
   const body = `
@@ -710,4 +780,4 @@ function adminPage() {
 </html>`;
 }
 
-module.exports = { adminPage, home, shop, product, cart, checkout, orderPlaced, contact, page, notFound };
+module.exports = { adminPage, home, shop, product, cart, checkout, orderPlaced, contact, page, notFound, certificates };

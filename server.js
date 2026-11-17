@@ -141,6 +141,50 @@ const HOME_DEFAULTS = {
   ].join('\n')
 };
 // runs at every server start inside a database context: upgrades old data and fills in new settings
+// Certificates page starter entries. Wording sticks to what each document actually is:
+// Udyam = government registration, MQA = private third-party GMP certificate,
+// ZED = the pledge (first step of the scheme, not a ZED certification level),
+// Make in India = the business's own self-declaration (kept unpublished — see its note).
+const STARTER_DOCUMENTS = [
+  {
+    title: 'Udyam Registration — MSME', kind: 'Government registration', badge: 'Govt. registered MSME',
+    issuer: 'Ministry of Micro, Small & Medium Enterprises, Government of India',
+    number: 'UDYAM-DL-11-0167330', issued: '2026-07-27', validUntil: '',
+    summary: 'Rupali Shine Herbal Oil is registered with the Government of India as a Micro enterprise. Major activity: Manufacturing — hair oils and related products.',
+    image: '/uploads/cert-udyam.webp', thumb: '/uploads/cert-udyam-sm.webp',
+    verifyUrl: 'https://udyamregistration.gov.in/Udyam_Verify.aspx', verifyHint: 'Enter the Udyam number on the government portal.',
+    published: true, featured: true, note: ''
+  },
+  {
+    title: 'GMP Certificate of Compliance', kind: 'Independent certification', badge: 'GMP certified',
+    issuer: 'MQA Certification Services (independent certification body)',
+    number: 'GMP/26M05635', issued: '2026-08-03', validUntil: '2029-08-02',
+    summary: 'An independent certification body assessed our unit and found it in compliance with GMP (Good Manufacturing Practices) for manufacturing hair oil and other herbal products. It stays valid subject to yearly surveillance audits.',
+    image: '/uploads/cert-gmp-mqa.webp', thumb: '/uploads/cert-gmp-mqa-sm.webp',
+    verifyUrl: 'https://www.mqacertification.com', verifyHint: 'Check the certificate number on the issuer’s website.',
+    published: true, featured: true, note: 'This is a private certification, not a government GMP licence. Keep the wording “independent certification body”.'
+  },
+  {
+    title: 'MSME ZED Pledge', kind: 'Government scheme pledge', badge: 'ZED pledge taken',
+    issuer: 'Ministry of MSME — Sustainable (ZED) Certification Scheme',
+    number: 'ZED_01082026_1004550', issued: '2026-08-01', validUntil: '',
+    summary: 'We have taken the Zero Defect, Zero Effect pledge: a commitment to safe, high-quality products made with processes that are environmentally sound and socially responsible. The pledge is the first step of the ZED scheme; the Bronze, Silver and Gold certification levels come after it.',
+    image: '/uploads/cert-zed-pledge.webp', thumb: '/uploads/cert-zed-pledge-sm.webp',
+    verifyUrl: 'https://zed.msme.gov.in', verifyHint: 'Scan the QR code on the pledge, or visit the ZED portal.',
+    published: true, featured: true, note: 'This is the pledge, not a ZED certificate — do not describe it as “ZED certified” until you get Bronze/Silver/Gold.'
+  },
+  {
+    title: 'Make in India — self-declaration', kind: 'Self-declaration', badge: 'Made in India',
+    issuer: 'Rupali Shine Herbal Oil (self-certified)',
+    number: '', issued: '2026-09-22', validUntil: '',
+    summary: 'Our own declaration, made for government purchases (GeM), that the product is made at our unit in Ashok Nagar, West Delhi.',
+    image: '/uploads/cert-make-in-india.webp', thumb: '/uploads/cert-make-in-india-sm.webp',
+    verifyUrl: '', verifyHint: '',
+    published: false, featured: false,
+    note: 'Kept off the website on purpose: (1) it is a self-declaration, not a certificate issued to you; (2) it states 0% local content, which reads badly to shoppers; (3) it carries the State Emblem of India, whose commercial use is restricted by the State Emblem of India (Prohibition of Improper Use) Act, 2005. Publish only after checking with your CA or lawyer.'
+  }
+];
+
 function prepare() {
 migrate();
 if (!db.secret) db.secret = crypto.randomBytes(32).toString('hex'); // signs admin login cookies
@@ -153,6 +197,12 @@ for (const p of db.products) {
 db.spinOrdered = true;
 db.coupons = db.coupons || [];
 db.reviews = db.reviews || [];
+db.documents = db.documents || [];
+// first run: the business's certificates and registrations, described exactly as issued
+if (!db.docsSeeded) {
+  db.docsSeeded = true;
+  if (!db.documents.length) db.documents.push(...STARTER_DOCUMENTS.map(d => ({ id: crypto.randomUUID(), createdAt: new Date().toISOString(), ...d })));
+}
 // header & logo, WhatsApp chat button
 for (const [k, v] of Object.entries({
   logoStyle: 'script', logoText: '', logoTm: true,
@@ -326,6 +376,7 @@ app.get('/product/:slug', (req, res) => {
 app.get('/cart', (req, res) => send(res, views.cart(db)));
 app.get('/checkout', (req, res) => send(res, views.checkout(db, paymentMethods())));
 app.get('/contact', (req, res) => send(res, views.contact(db)));
+app.get('/certificates', (req, res) => send(res, views.certificates(db)));
 app.get('/order/:key', (req, res) => {
   const o = db.orders.find(x => x.key === req.params.key);
   if (!o) return send(res, views.notFound(db), 404);
@@ -1069,6 +1120,55 @@ app.put('/api/admin/reviews/:id', (req, res) => {
 app.delete('/api/admin/reviews/:id', (req, res) => {
   db.reviews = db.reviews.filter(x => x.id !== req.params.id);
   res.json({ ok: true });
+});
+
+// certificates & registrations shown on /certificates
+const isoDay = v => /^\d{4}-\d{2}-\d{2}$/.test(str(v, 10)) && !Number.isNaN(Date.parse(v)) ? str(v, 10) : '';
+function documentFrom(b, existing) {
+  const title = str(b.title, 100);
+  if (title.length < 3) throw new Error('Please enter the certificate name.');
+  const image = safeImage(b.image);
+  if (!image) throw new Error('Please upload a photo or scan of the certificate.');
+  const verifyUrl = str(b.verifyUrl) ? safeUrl(b.verifyUrl) : '';
+  if (str(b.verifyUrl) && !verifyUrl) throw new Error('The verify link must start with https://');
+  const issued = isoDay(b.issued), validUntil = isoDay(b.validUntil);
+  if (issued && validUntil && validUntil <= issued) throw new Error('“Valid until” must be after the issue date.');
+  const d = existing || { id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+  return Object.assign(d, {
+    title, image, issued, validUntil, verifyUrl,
+    thumb: existing && existing.image === image ? existing.thumb || '' : '', // a new image has no separate thumbnail
+    kind: str(b.kind, 60), badge: str(b.badge, 40), issuer: str(b.issuer, 140), number: str(b.number, 60),
+    summary: str(b.summary, 700), verifyHint: str(b.verifyHint, 140), note: str(b.note, 700),
+    published: !!b.published, featured: !!b.featured
+  });
+}
+app.get('/api/admin/documents', (req, res) => res.json(db.documents));
+app.post('/api/admin/documents', (req, res) => {
+  try { db.documents.push(documentFrom(req.body || {})); res.json(db.documents); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.put('/api/admin/documents/:id', (req, res) => {
+  const d = db.documents.find(x => x.id === req.params.id);
+  if (!d) return res.status(404).json({ error: 'Certificate not found.' });
+  const b = req.body || {};
+  // quick switches from the list
+  if (Object.keys(b).every(k => k === 'published' || k === 'featured')) {
+    if ('published' in b) d.published = !!b.published;
+    if ('featured' in b) d.featured = !!b.featured;
+    return res.json(db.documents);
+  }
+  try { documentFrom(b, d); res.json(db.documents); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.post('/api/admin/documents/:id/move', (req, res) => {
+  const i = db.documents.findIndex(x => x.id === req.params.id), j = i + (req.body && req.body.dir === 'up' ? -1 : 1);
+  if (i < 0) return res.status(404).json({ error: 'Certificate not found.' });
+  if (j >= 0 && j < db.documents.length) [db.documents[i], db.documents[j]] = [db.documents[j], db.documents[i]];
+  res.json(db.documents);
+});
+app.delete('/api/admin/documents/:id', (req, res) => {
+  db.documents = db.documents.filter(x => x.id !== req.params.id);
+  res.json(db.documents);
 });
 
 app.get('/api/admin/messages', (req, res) => res.json(db.messages));
