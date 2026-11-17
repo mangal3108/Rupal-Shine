@@ -453,17 +453,61 @@
     /* ---------- offers & coupons ---------- */
     async offers(main) {
       let o = await api('GET', '/offers');
-      const cState = c => !c.active ? '<span class="tag off">Off</span>' : c.expires && Date.now() > Date.parse(c.expires) ? '<span class="tag off">Expired</span>' : c.maxUses && c.used >= c.maxUses ? '<span class="tag off">Used up</span>' : '<span class="tag">Active</span>';
+      const now = () => Date.now();
+      const cState = c => !c.active ? '<span class="tag off">Off</span>'
+        : c.starts && now() < Date.parse(c.starts) ? '<span class="tag new">Scheduled</span>'
+        : c.expires && now() > Date.parse(c.expires) ? '<span class="tag off">Expired</span>'
+        : c.maxUses && c.used >= c.maxUses ? '<span class="tag off">Used up</span>' : '<span class="tag">Active</span>';
+      const pname = id => (o.products.find(p => p.id === id) || {}).name || '';
+      // same wording the shopper sees
+      const summary = c => {
+        const what = c.type === 'shipping' ? 'Free delivery' : c.type === 'percent' ? `${c.value}% off${c.maxDiscount ? ` (up to ${money(c.maxDiscount)})` : ''}` : `${money(c.value)} off`;
+        return what + (c.products && c.products.length ? ` on ${c.products.map(pname).filter(Boolean).join(', ')}` : '') + (c.minOrder ? ` on orders above ${money(c.minOrder)}` : '');
+      };
+      const rules = c => [
+        c.perCustomer ? `${c.perCustomer}× per customer` : '', c.firstOrder ? 'First order only' : '',
+        c.combine === false ? 'Not with Buy-more offer' : '', c.starts ? 'From ' + date(c.starts) : '', c.expires ? 'Until ' + date(c.expires) : ''
+      ].filter(Boolean).map(r => `<span class="rule">${esc(r)}</span>`).join('');
+      const csv = codes => 'data:text/csv;charset=utf-8,' + encodeURIComponent('Coupon code\n' + codes.join('\n'));
+
       const draw = () => {
-        main.innerHTML = `<div class="top"><h1>Offers &amp; Coupons</h1><button class="btn" data-new>+ Add coupon</button></div>
-        <div class="card"><p class="muted" style="margin:0"><b>Product sale price:</b> open <b>Products → Edit</b> and set the selling price below the M.R.P. You can add a sale label and an end time (with countdown) there. The offers on this page apply on top of that, in the cart.</p></div>
-        <div class="card"><h3>Coupon codes</h3>${o.coupons.length ? `<div class="table-wrap"><table>
-          <tr><th>Code</th><th>Discount</th><th>Min. order</th><th>Used</th><th>Expires</th><th>Status</th><th></th></tr>
-          ${o.coupons.map(c => `<tr><td><b>${esc(c.code)}</b>${c.showOnSite ? ' <span class="tag gold">Shown on site</span>' : ''}</td>
-            <td>${c.type === 'percent' ? c.value + '%' : money(c.value)} off</td><td>${c.minOrder ? money(c.minOrder) : '—'}</td>
-            <td>${c.used}${c.maxUses ? ' / ' + c.maxUses : ''}</td><td class="muted">${c.expires ? date(c.expires) : 'No expiry'}</td><td>${cState(c)}</td>
-            <td class="actions"><button class="btn ghost sm" data-edit="${esc(c.id)}">Edit</button><button class="btn danger sm" data-del="${esc(c.id)}">Delete</button></td></tr>`).join('')}
-        </table></div>` : '<p class="empty">No coupons yet. Click “Add coupon” to create one, e.g. WELCOME10 for 10% off.</p>'}</div>
+        const singles = o.coupons.filter(c => !c.batch);
+        const batches = {};
+        o.coupons.filter(c => c.batch).forEach(c => { (batches[c.batch] = batches[c.batch] || []).push(c); });
+        const stat = code => o.stats[code] || { orders: 0, revenue: 0, discount: 0 };
+        main.innerHTML = `<div class="top"><h1>Offers &amp; Coupons</h1><div class="actions"><button class="btn ghost" data-batch>Generate batch of codes</button><button class="btn" data-new>+ Add coupon</button></div></div>
+        <div class="card"><p class="muted" style="margin:0"><b>Product sale price:</b> open <b>Products → Edit</b> and set the selling price below the M.R.P. Coupons and the offers below apply on top of that, in the cart and at payment — the discounted total is what Razorpay, Stripe or Cashfree charge.</p></div>
+
+        <div class="card"><h3>Coupon codes</h3>${singles.length ? `<div class="table-wrap"><table class="coupons-table">
+          <tr><th>Code</th><th>Discount</th><th>Rules</th><th>Used</th><th>Results</th><th>Status</th><th></th></tr>
+          ${singles.map(c => { const s = stat(c.code); return `<tr>
+            <td><b class="code">${esc(c.code)}</b>${c.showOnSite ? '<br><span class="tag gold">Shown on site</span>' : ''}${c.label ? `<br><span class="muted">${esc(c.label)}</span>` : ''}</td>
+            <td>${esc(summary(c))}</td>
+            <td class="rules">${rules(c) || '<span class="muted">—</span>'}</td>
+            <td>${c.used}${c.maxUses ? ' / ' + c.maxUses : ''}</td>
+            <td>${s.orders ? `${s.orders} order${s.orders > 1 ? 's' : ''}<br><span class="muted">${money(s.revenue)} sales · ${money(s.discount)} given</span>` : '<span class="muted">No orders yet</span>'}</td>
+            <td>${cState(c)}</td>
+            <td class="actions"><button class="btn ghost sm" data-toggle="${esc(c.id)}">${c.active ? 'Turn off' : 'Turn on'}</button><button class="btn ghost sm" data-edit="${esc(c.id)}">Edit</button><button class="btn ghost sm" data-copy="${esc(c.id)}">Duplicate</button><button class="btn danger sm" data-del="${esc(c.id)}">Delete</button></td></tr>`; }).join('')}
+        </table></div>` : '<p class="empty">No coupons yet. Click “Add coupon” to create one, e.g. WELCOME10 for 10% off the first order.</p>'}</div>
+
+        ${Object.keys(batches).length ? `<div class="card"><h3>Batches of single-use codes</h3><div class="table-wrap"><table>
+          <tr><th>Batch</th><th>Discount</th><th>Codes</th><th>Used</th><th></th></tr>
+          ${Object.entries(batches).map(([id, list]) => `<tr><td><b>${esc(list[0].batchName || 'Batch')}</b><br><span class="muted">${date(list[0].createdAt)}</span></td><td>${esc(summary(list[0]))}</td><td>${list.length}</td><td>${list.filter(c => c.used).length}</td>
+            <td class="actions"><a class="btn ghost sm" download="${esc((list[0].batchName || 'coupons').replace(/[^\w-]+/g, '-'))}.csv" href="${csv(list.filter(c => !c.used).map(c => c.code))}">Download unused codes</a><button class="btn danger sm" data-del-batch="${esc(id)}">Delete batch</button></td></tr>`).join('')}
+        </table></div></div>` : ''}
+
+        <form class="card" id="checkForm"><h3>Check a coupon code</h3>
+          <p class="muted" style="margin-top:-6px">Test any code exactly as a customer would at checkout — see whether it works and the final price.</p>
+          <div class="fields check-grid">
+            ${field('Coupon code', 'code', '', { attrs: 'required maxlength="30" style="text-transform:uppercase" placeholder="WELCOME10"' })}
+            <label class="field"><span>Product</span><select name="productId">${o.products.map(p => `<option value="${esc(p.id)}">${esc(p.name)} (${money(p.price)})</option>`).join('')}</select></label>
+            ${field('Quantity', 'qty', 1, { type: 'number', attrs: 'min="1" max="99"' })}
+            <label class="field"><span>Payment</span><select name="method"><option value="cod">Cash on Delivery</option><option value="online">Online payment</option></select></label>
+            ${field('Customer mobile (optional)', 'phone', '', { attrs: 'inputmode="numeric" maxlength="13"', hint: 'Checks “per customer” and “first order only” rules.' })}
+          </div>
+          <div class="form-actions" style="justify-content:flex-start"><button class="btn">Check code</button></div>
+          <div id="checkOut"></div>
+        </form>
 
         <form class="card" id="autoForm"><h3>Automatic offers</h3><div class="fields">
           ${area('Buy more, save more — one rule per line', 'bulkTiers', o.bulkTiers, { rows: 3, hint: 'Format: quantity: percent off — e.g. “2: 5” gives 5% off when the cart has 2 or more items, “3: 10” gives 10% off for 3 or more. Shown as pack choices on the product page. Leave empty to switch off.' })}
@@ -471,38 +515,128 @@
           ${area('Trust points under the Buy button — one per line', 'trustLines', o.trustLines, { rows: 3, hint: 'Short and true, e.g. 100% Natural. Cash on Delivery and Secure online payment are added automatically when enabled.' })}
         </div><div class="form-actions"><button class="btn">Save offers</button></div></form>`;
       };
-      const couponForm = c => {
-        openModal(c ? 'Edit coupon' : 'Add coupon', `<form id="cForm"><div class="fields">
-            ${field('Coupon code', 'code', c?.code, { attrs: 'required maxlength="30" placeholder="WELCOME10" style="text-transform:uppercase"', hint: 'Letters and numbers only.' })}
-            <label class="field"><span>Discount type</span><select name="type"><option value="percent"${c?.type === 'flat' ? '' : ' selected'}>Percent off (%)</option><option value="flat"${c?.type === 'flat' ? ' selected' : ''}>Flat amount off (₹)</option></select></label>
-            ${field('Discount value', 'value', c?.value ?? '', { type: 'number', attrs: 'required min="1" step="1"', hint: 'e.g. 10 for 10% off, or 50 for ₹50 off.' })}
-            ${field('Minimum order (₹)', 'minOrder', c?.minOrder ?? 0, { type: 'number', attrs: 'min="0" step="1"', hint: '0 = no minimum.' })}
-            ${field('Total uses allowed', 'maxUses', c?.maxUses ?? 0, { type: 'number', attrs: 'min="0" step="1"', hint: '0 = unlimited.' })}
-            ${field('Expires on (optional)', 'expires', toLocalInput(c?.expires), { type: 'datetime-local' })}
-            <div class="field full checks">${check('Active', 'active', c ? c.active : true)}${check('Show this coupon on the product page', 'showOnSite', c?.showOnSite)}</div>
+
+      // the discount rules, shared by the single-coupon form and the batch generator
+      const ruleFields = c => `
+        <label class="field"><span>Discount type</span><select name="type" data-type>
+          <option value="percent"${!c || c.type === 'percent' ? ' selected' : ''}>Percent off (%)</option>
+          <option value="flat"${c && c.type === 'flat' ? ' selected' : ''}>Flat amount off (₹)</option>
+          <option value="shipping"${c && c.type === 'shipping' ? ' selected' : ''}>Free delivery</option></select></label>
+        <div data-only="percent flat">${field('Discount value', 'value', c ? c.value : '', { type: 'number', attrs: 'min="1" step="1"', hint: 'e.g. 10 for 10% off, or 50 for ₹50 off.' })}</div>
+        <div data-only="percent">${field('Maximum discount (₹)', 'maxDiscount', c ? c.maxDiscount || 0 : 0, { type: 'number', attrs: 'min="0" step="1"', hint: '0 = no limit. e.g. 20% off, up to ₹100.' })}</div>
+        ${field('Minimum order (₹)', 'minOrder', c ? c.minOrder : 0, { type: 'number', attrs: 'min="0" step="1"', hint: '0 = no minimum.' })}
+        ${field('Starts (optional)', 'starts', toLocalInput(c && c.starts), { type: 'datetime-local', hint: 'Leave empty to start now.' })}
+        ${field('Ends (optional)', 'expires', toLocalInput(c && c.expires), { type: 'datetime-local', hint: 'Shown to shoppers as “Ends …”.' })}
+        <div class="field full"><span>Works on</span><div class="checks">${o.products.map(p => `<label class="check"><input type="checkbox" name="products" value="${esc(p.id)}"${c && c.products && c.products.includes(p.id) ? ' checked' : ''}> ${esc(p.name)}</label>`).join('')}</div><small>Tick nothing to let it work on every product.</small></div>`;
+      const wireType = form => {
+        const sync = () => { const t = form.querySelector('[data-type]').value; form.querySelectorAll('[data-only]').forEach(el => { el.hidden = !el.dataset.only.split(' ').includes(t); }); };
+        form.querySelector('[data-type]').addEventListener('change', sync); sync();
+      };
+      const readRules = form => {
+        const d = formData(form);
+        d.products = [...form.querySelectorAll('input[name=products]:checked')].map(i => i.value);
+        d.starts = fromLocalInput(form.starts.value); d.expires = fromLocalInput(form.expires.value);
+        return d;
+      };
+
+      const couponForm = (c, copy) => {
+        openModal(c && !copy ? 'Edit coupon' : 'Add coupon', `<form id="cForm"><div class="fields">
+            <label class="field"><span>Coupon code</span><div class="code-row"><input name="code" value="${esc(copy ? '' : c ? c.code : '')}" required maxlength="30" placeholder="WELCOME10" style="text-transform:uppercase"><button type="button" class="btn ghost sm" data-gen>Generate</button></div><small>Letters and numbers only. “Generate” makes a random, easy-to-read code.</small></label>
+            ${field('Description for shoppers (optional)', 'label', c ? c.label : '', { attrs: 'maxlength="80" placeholder="e.g. Diwali offer — 15% off"', hint: 'Leave empty to describe it automatically.' })}
+            ${ruleFields(c)}
+            ${field('Total uses allowed', 'maxUses', c ? c.maxUses : 0, { type: 'number', attrs: 'min="0" step="1"', hint: '0 = unlimited.' })}
+            ${field('Uses per customer', 'perCustomer', c ? c.perCustomer || 0 : 0, { type: 'number', attrs: 'min="0" step="1"', hint: 'Checked by mobile number. 1 = once per customer, 0 = no limit.' })}
+            <div class="field full checks">
+              ${check('First order only', 'firstOrder', c && c.firstOrder)}
+              ${check('Can be combined with the Buy-more offer', 'combine', !c || c.combine !== false)}
+              ${check('Active', 'active', c ? c.active : true)}
+              ${check('Show on the product page and in the cart', 'showOnSite', c && c.showOnSite)}
+            </div>
+            <p class="preview-line full" data-preview></p>
           </div><p class="error" hidden></p>
           <div class="form-actions"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn">Save coupon</button></div></form>`);
-        modal.querySelector('#cForm').onsubmit = async e => {
+        const form = modal.querySelector('#cForm');
+        wireType(form);
+        const prev = () => { const d = readRules(form); d.value = +d.value || 0; d.maxDiscount = +d.maxDiscount || 0; d.minOrder = +d.minOrder || 0; form.querySelector('[data-preview]').textContent = 'Shoppers see: ' + (d.label || summary(d)) + (d.firstOrder ? ' · first order only' : ''); };
+        form.addEventListener('input', prev); form.addEventListener('change', prev); prev();
+        form.querySelector('[data-gen]').onclick = async () => {
+          try { const r = await api('POST', '/coupons/generate', { prefix: form.code.value.replace(/[^a-z]/gi, '').slice(0, 8) || 'RS', length: 5 }); form.code.value = r.code; }
+          catch (ex) { fail(ex); }
+        };
+        form.onsubmit = async e => {
           e.preventDefault();
           try {
-            o = await api(c ? 'PUT' : 'POST', '/coupons' + (c ? '/' + c.id : ''), { ...formData(e.target), expires: fromLocalInput(e.target.expires.value) });
+            o = await api(c && !copy ? 'PUT' : 'POST', '/coupons' + (c && !copy ? '/' + c.id : ''), readRules(form));
             closeModal(); draw(); toast('Coupon saved');
           } catch (ex) { const er = modal.querySelector('.error'); er.textContent = ex.message; er.hidden = false; }
         };
       };
+
+      const batchForm = () => {
+        openModal('Generate a batch of codes', `<form id="bForm">
+          <p class="note" style="background:var(--leaf-soft);border-color:#cfe3b0;color:var(--green-2)">Creates many different codes that each work <b>once</b> — ideal for influencers, WhatsApp customers or printed cards in the parcel. A shared code can't be reused.</p>
+          <div class="fields">
+            ${field('Batch name', 'batchName', '', { attrs: 'maxlength="60" placeholder="e.g. Instagram — Priya"' })}
+            ${field('Code starts with', 'prefix', 'RS', { attrs: 'maxlength="12" style="text-transform:uppercase"', hint: 'e.g. RS gives codes like RS7KQ4M.' })}
+            ${field('How many codes', 'count', 20, { type: 'number', attrs: 'min="1" max="500"' })}
+            ${field('Random characters per code', 'length', 5, { type: 'number', attrs: 'min="4" max="12"' })}
+            ${ruleFields(null)}
+            <div class="field full checks">${check('First order only', 'firstOrder', false)}${check('Can be combined with the Buy-more offer', 'combine', true)}${check('Active', 'active', true)}</div>
+          </div><p class="error" hidden></p>
+          <div class="form-actions"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn">Generate codes</button></div></form>`);
+        const form = modal.querySelector('#bForm');
+        wireType(form);
+        form.onsubmit = async e => {
+          e.preventDefault();
+          const btn = form.querySelector('button:not([type])'); btn.disabled = true; btn.textContent = 'Generating…';
+          try {
+            const r = await api('POST', '/coupons/generate', { ...readRules(form), create: true });
+            o = r; draw();
+            openModal(`${r.codes.length} codes ready`, `<p>Each code works once. Copy them or download the list to share.</p>
+              <textarea class="codes-out" rows="10" readonly>${esc(r.codes.join('\n'))}</textarea>
+              <div class="form-actions"><button type="button" class="btn ghost" data-copy-codes>Copy all</button><a class="btn ghost" download="coupon-codes.csv" href="${csv(r.codes)}">Download CSV</a><button type="button" class="btn" data-close>Done</button></div>`);
+            modal.querySelector('[data-copy-codes]').onclick = () => { navigator.clipboard.writeText(r.codes.join('\n')).then(() => toast('Codes copied'), () => toast('Select the codes and copy them', true)); };
+          } catch (ex) { const er = modal.querySelector('.error'); if (er) { er.textContent = ex.message; er.hidden = false; } btn.disabled = false; btn.textContent = 'Generate codes'; }
+        };
+      };
+
       draw();
       main.addEventListener('click', async e => {
-        const ed = e.target.closest('[data-edit]'), del = e.target.closest('[data-del]');
-        if (e.target.closest('[data-new]')) couponForm();
-        if (ed) couponForm(o.coupons.find(c => c.id === ed.dataset.edit));
-        if (del && confirm('Delete this coupon?')) { try { o = await api('DELETE', '/coupons/' + del.dataset.del); draw(); } catch (ex) { fail(ex); } }
+        const t = e.target.closest('button'); if (!t) return;
+        const find = id => o.coupons.find(c => c.id === id);
+        try {
+          if ('new' in t.dataset) couponForm();
+          if ('batch' in t.dataset) batchForm();
+          if (t.dataset.edit) couponForm(find(t.dataset.edit));
+          if (t.dataset.copy) couponForm(find(t.dataset.copy), true);
+          if (t.dataset.toggle) { const c = find(t.dataset.toggle); o = await api('PUT', '/coupons/' + c.id, { active: !c.active }); draw(); toast(c.active ? 'Coupon turned off' : 'Coupon turned on'); }
+          if (t.dataset.del && confirm('Delete this coupon?')) { o = await api('DELETE', '/coupons/' + t.dataset.del); draw(); }
+          if (t.dataset.delBatch && confirm('Delete every code in this batch?')) { o = await api('DELETE', '/coupons/batch/' + t.dataset.delBatch); draw(); }
+        } catch (ex) { fail(ex); }
       });
       main.addEventListener('submit', async e => {
-        if (e.target.id !== 'autoForm') return;
         e.preventDefault();
-        try { o = await api('PUT', '/offers', formData(e.target)); draw(); toast('Offers saved'); } catch (ex) { fail(ex); }
+        if (e.target.id === 'autoForm') {
+          try { o = await api('PUT', '/offers', formData(e.target)); draw(); toast('Offers saved'); } catch (ex) { fail(ex); }
+        }
+        if (e.target.id === 'checkForm') {
+          const out = e.target.querySelector('#checkOut');
+          const d = formData(e.target);
+          try {
+            const r = await api('POST', '/coupons/check', d);
+            out.innerHTML = `<div class="check-result ${r.valid ? 'ok' : 'bad'}">
+              <p class="verdict">${r.valid ? `✓ <b>${esc(r.code)}</b> works` : `✗ <b>${esc(r.code)}</b> ${r.exists ? 'can’t be used here' : 'does not exist'}`}</p>
+              ${r.error ? `<p>${esc(r.error)}</p>` : ''}${r.note ? `<p>${esc(r.note)}</p>` : ''}
+              ${r.summary ? `<p class="muted">${esc(r.summary)} · used ${r.used}${r.maxUses ? ' of ' + r.maxUses : ''} times</p>` : ''}
+              <table class="mini"><tr><td>${esc(r.cart)}</td><td>${money(r.subtotal)}</td></tr>
+                ${r.discounts.map(x => `<tr><td>${esc(x.label)}</td><td>− ${money(x.amount)}</td></tr>`).join('')}
+                <tr><td>Delivery</td><td>${r.shipping ? money(r.shipping) : 'Free'}</td></tr>
+                <tr class="total"><td>Customer pays</td><td>${money(r.total)}</td></tr></table></div>`;
+          } catch (ex) { out.innerHTML = `<p class="error">${esc(ex.message)}</p>`; }
+        }
       });
     },
+
 
     /* ---------- payments ---------- */
     async payments(main) {

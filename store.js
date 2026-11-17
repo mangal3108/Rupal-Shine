@@ -63,18 +63,21 @@ async function load(lists) {
 async function flush(ctx) {
   const d = await database();
   const ops = [];
-  // Stock changes are applied as "+n / -n" inside the database, so orders placed at the same
-  // moment each subtract their own quantity instead of overwriting one another.
+  // Counters (product stock, coupon uses) are changed as "+n / -n" inside the database, so orders
+  // placed at the same moment each count their own change instead of overwriting one another.
   const moves = new Map();
-  for (const m of ctx.stock.splice(0)) moves.set(m.id, (moves.get(m.id) || 0) + m.delta);
-  const before = ctx.snap.lists.products;
-  for (const [id, delta] of moves) {
-    const i = (ctx.data.products || []).findIndex(p => p.id === id);
+  for (const m of ctx.stock.splice(0)) {
+    const k = `${m.list}\u0000${m.id}\u0000${m.field}`;
+    moves.set(k, { ...m, delta: ((moves.get(k) || {}).delta || 0) + m.delta });
+  }
+  for (const { list, id, field, delta } of moves.values()) {
+    const before = ctx.snap.lists[list];
+    const i = (ctx.data[list] || []).findIndex(p => p.id === id);
     if (!delta || i < 0 || !before) continue;
-    const item = ctx.data.products[i];
-    // if stock is the only thing that changed on this product, skip the full rewrite below
-    if (before.get(id) === sign({ ...item, stock: item.stock - delta }, i, 'products')) before.set(id, sign(item, i, 'products'));
-    ops.push(d.collection('products').updateOne({ _id: id }, { $inc: { 'data.stock': delta } }));
+    const item = ctx.data[list][i];
+    // if the counter is the only thing that changed on this item, skip the full rewrite below
+    if (before.get(id) === sign({ ...item, [field]: item[field] - delta }, i, list)) before.set(id, sign(item, i, list));
+    ops.push(d.collection(list).updateOne({ _id: id }, { $inc: { ['data.' + field]: delta } }));
   }
   for (const [key, value] of Object.entries(ctx.data)) {
     if (LISTS[key]) {
@@ -155,10 +158,11 @@ function middleware(seed, prepare, need) {
 }
 
 // record a stock change made by the current request (see flush)
-function stockMoved(id, delta) {
+function counterMoved(list, id, field, delta) {
   const ctx = context.getStore();
-  if (ctx && delta) ctx.stock.push({ id, delta });
+  if (ctx && delta) ctx.stock.push({ list, id, field, delta });
 }
+const stockMoved = (id, delta) => counterMoved('products', id, 'stock', delta);
 
 // order numbers come from an atomic counter, so they are never repeated
 async function nextOrderNumber() {
@@ -178,4 +182,4 @@ async function getUpload(name) {
   return doc ? { type: doc.type, data: Buffer.from(doc.data.buffer || doc.data) } : null;
 }
 
-module.exports = { db, middleware, stockMoved, nextOrderNumber, saveUpload, getUpload, ALL_LISTS };
+module.exports = { db, middleware, stockMoved, counterMoved, nextOrderNumber, saveUpload, getUpload, ALL_LISTS };

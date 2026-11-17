@@ -144,10 +144,16 @@
   const nudgesHtml = q => `
     ${q.freeShippingGap > 0 ? `<div class="nudge"><span>Add <b>${money(q.freeShippingGap)}</b> more for <b>free delivery</b></span><i><u style="width:${Math.max(6, Math.min(100, 100 - q.freeShippingGap / (q.freeShippingGap + q.total - q.shipping) * 100))}%"></u></i></div>` : ''}
     ${q.nextTier ? `<div class="nudge"><span>Add <b>${q.nextTier.need} more</b> to get <b>${q.nextTier.percent}% off</b> your order</span></div>` : ''}`;
-  const couponHtml = q => q.coupon
-    ? `<div class="coupon-box applied"><span>Coupon <b>${esc(q.coupon)}</b> applied</span><button type="button" data-coupon-remove>Remove</button></div>`
-    : `<form class="coupon-box" data-coupon-form><input name="code" placeholder="Coupon code" maxlength="30" autocomplete="off" value="${esc(getCoupon())}"><button>Apply</button></form>
-       ${q.couponError && getCoupon() ? `<p class="coupon-err">${esc(q.couponError)}</p>` : ''}`;
+  // coupon box: applied coupon, or the code field plus any coupons the store chose to show
+  const couponHtml = q => {
+    const offers = (q.offers || []).filter(o => o.code !== q.coupon);
+    return (q.coupon
+      ? `<div class="coupon-box applied"><span><i class="cb-tick">✓</i><span><b>${esc(q.coupon)}</b> applied${q.couponSummary ? `<small>${esc(q.couponSummary)}</small>` : ''}</span></span><button type="button" data-coupon-remove>Remove</button></div>
+         ${q.couponNote ? `<p class="coupon-note">${esc(q.couponNote)}</p>` : ''}`
+      : `<form class="coupon-box" data-coupon-form><input name="code" placeholder="Have a coupon code?" maxlength="30" autocomplete="off" autocapitalize="characters" value="${esc(getCoupon())}" aria-label="Coupon code"><button>Apply</button></form>
+         ${q.couponError && getCoupon() ? `<p class="coupon-err" role="alert">${esc(q.couponError)}</p>` : ''}`) +
+      (offers.length ? `<div class="coupon-offers"><span>Available offers</span>${offers.map(o => `<button type="button" class="offer-chip" data-apply-coupon="${esc(o.code)}"><b>${esc(o.code)}</b><small>${esc(o.summary)}</small><em>Apply</em></button>`).join('')}</div>` : '');
+  };
   // coupon box works the same on the cart and checkout pages
   function wireCoupon(root, rerender) {
     root.addEventListener('submit', e => {
@@ -156,7 +162,11 @@
       store.set(COUPON, e.target.code.value.trim().toUpperCase() || null);
       rerender();
     });
-    root.addEventListener('click', e => { if (e.target.closest('[data-coupon-remove]')) { store.set(COUPON, null); rerender(); } });
+    root.addEventListener('click', e => {
+      if (e.target.closest('[data-coupon-remove]')) { store.set(COUPON, null); rerender(); }
+      const chip = e.target.closest('[data-apply-coupon]');
+      if (chip) { store.set(COUPON, chip.dataset.applyCoupon); rerender(); }
+    });
   }
 
   /* ---------- cart page ---------- */

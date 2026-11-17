@@ -146,3 +146,23 @@ code { background: var(--cream); padding: 1px 6px; border-radius: 6px; font-size
 .star-pick label:hover, .star-pick label:hover ~ label, .star-pick input:checked ~ label { color: #e0a526; }
 .star-pick label:hover { transform: scale(1.12); }
 .star-pick input:focus-visible + label { outline: 2px solid var(--leaf); border-radius: 4px; }
+
+/* ---------- coupons ---------- */
+.top .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.code { font-family: ui-monospace, Consolas, monospace; letter-spacing: .06em; color: var(--green); }
+.coupons-table td.rules { max-width: 220px; }
+.rule { display: inline-block; font-size: 11px; background: #f3f1ea; color: var(--ink); border-radius: 999px; padding: 1px 8px; margin: 0 4px 4px 0; }
+.code-row { display: flex; gap: 8px; }
+.code-row input { flex: 1; }
+.preview-line { grid-column: 1 / -1; margin: 4px 0 0; padding: 10px 14px; background: #fffaf0; border: 1.5px dashed var(--gold); border-radius: 12px; font-size: 13px; color: var(--green); }
+.check-grid { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.check-result { margin-top: 14px; border-radius: 14px; padding: 14px 16px; border: 1px solid var(--line); }
+.check-result.ok { background: #f0f8ec; border-color: #c7e2bb; }
+.check-result.bad { background: #fdf1ee; border-color: #efc9c0; }
+.check-result p { margin: 0 0 6px; }
+.check-result .verdict { font-size: 16px; }
+.check-result.ok .verdict { color: #2f7d32; } .check-result.bad .verdict { color: var(--red); }
+table.mini { width: 100%; max-width: 420px; margin-top: 8px; border-collapse: collapse; font-size: 13.5px; }
+table.mini td { padding: 4px 0; border: 0; } table.mini td:last-child { text-align: right; }
+table.mini tr.total td { border-top: 1px solid var(--line); font-weight: 600; padding-top: 8px; }
+.codes-out { width: 100%; font-family: ui-monospace, Consolas, monospace; letter-spacing: .06em; }

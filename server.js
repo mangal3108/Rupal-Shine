@@ -9,7 +9,7 @@ const multer = require('multer');
 const crypto = require('crypto');
 const views = require('./views');
 const pincode = require('./pincode');
-const { db, middleware: storeMiddleware, stockMoved, nextOrderNumber, saveUpload, getUpload, ALL_LISTS } = require('./store');
+const { db, middleware: storeMiddleware, stockMoved, counterMoved, nextOrderNumber, saveUpload, getUpload, ALL_LISTS } = require('./store');
 
 const PORT = process.env.PORT || 3000;
 
@@ -321,7 +321,7 @@ app.get('/shop', (req, res) => send(res, views.shop(db, activeProducts(), str(re
 app.get('/product/:slug', (req, res) => {
   const p = activeProducts().find(x => x.slug === req.params.slug);
   if (!p) return send(res, views.notFound(db), 404);
-  send(res, views.product(db, p, activeProducts().filter(x => x.id !== p.id).slice(0, 4), paymentMethods(), { coupons: visibleCoupons(), tiers: bulkTiers() }, reviewsFor(p)));
+  send(res, views.product(db, p, activeProducts().filter(x => x.id !== p.id).slice(0, 4), paymentMethods(), { coupons: visibleCoupons().map(c => ({ ...c, summary: c.label || couponSummary(c) })), tiers: bulkTiers() }, reviewsFor(p)));
 });
 app.get('/cart', (req, res) => send(res, views.cart(db)));
 app.get('/checkout', (req, res) => send(res, views.checkout(db, paymentMethods())));
@@ -362,45 +362,99 @@ const bulkTiers = () => String(db.settings.bulkTiers || '').split('\n')
   .map(l => /^\s*(\d+)\s*[:=]\s*(\d+(?:\.\d+)?)/.exec(l)).filter(Boolean)
   .map(m => ({ qty: +m[1], percent: Math.min(90, +m[2]) }))
   .filter(t => t.qty > 1 && t.percent > 0).sort((a, b) => a.qty - b.qty);
+/* ---------------- coupons ---------------- */
+const couponCode = v => str(v, 30).toUpperCase().replace(/[^A-Z0-9]/g, '');
 const couponExpired = c => !!c.expires && Date.now() > Date.parse(c.expires);
+const couponNotStarted = c => !!c.starts && Date.now() < Date.parse(c.starts);
 const couponUsedUp = c => c.maxUses > 0 && c.used >= c.maxUses;
-const visibleCoupons = () => db.coupons.filter(c => c.active && c.showOnSite && !couponExpired(c) && !couponUsedUp(c));
-function couponProblem(c, amount) {
+const couponLive = c => c.active && !couponExpired(c) && !couponNotStarted(c) && !couponUsedUp(c);
+const visibleCoupons = () => db.coupons.filter(c => c.showOnSite && couponLive(c));
+const shortDate = iso => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+// the one line a shopper reads, e.g. "10% off (up to ₹100) on orders above ₹499"
+function couponSummary(c) {
+  const what = c.type === 'shipping' ? 'Free delivery' : c.type === 'percent' ? `${c.value}% off${c.maxDiscount ? ` (up to ₹${c.maxDiscount})` : ''}` : `₹${c.value} off`;
+  const only = c.products && c.products.length ? ` on ${c.products.map(id => (db.products.find(p => p.id === id) || {}).name).filter(Boolean).join(', ')}` : '';
+  return what + only + (c.minOrder ? ` on orders above ₹${c.minOrder}` : '') + (c.firstOrder ? ' · first order only' : '');
+}
+// why a coupon can't be used for this cart ('' = it can)
+function couponProblem(c, amount, eligible) {
   if (!c || !c.active) return 'This coupon code is not valid.';
+  if (couponNotStarted(c)) return `This coupon starts on ${shortDate(c.starts)}.`;
   if (couponExpired(c)) return 'This coupon has expired.';
   if (couponUsedUp(c)) return 'This coupon is no longer available.';
-  if (amount < c.minOrder) return `Add items worth ₹${c.minOrder} or more to use this coupon.`;
+  if (eligible <= 0) return 'This coupon does not apply to the items in your cart.';
+  if (amount < c.minOrder) return `Add items worth ₹${Math.ceil(c.minOrder - amount)} more to use this coupon (minimum order ₹${c.minOrder}).`;
   return '';
 }
+// checks that need the shopper's mobile number, so they run when the order is placed
+function couponCustomerProblem(c, phone) {
+  if (!c || (!c.perCustomer && !c.firstOrder)) return '';
+  const mine = db.orders.filter(o => last10(o.customer && o.customer.phone) === last10(phone) && !['cancelled', 'pending'].includes(o.status));
+  if (c.firstOrder && mine.length) return `Coupon ${c.code} is for first orders only.`;
+  if (c.perCustomer && mine.filter(o => o.coupon === c.code).length >= c.perCustomer)
+    return c.perCustomer === 1 ? `You have already used coupon ${c.code}.` : `Coupon ${c.code} can be used ${c.perCustomer} times per customer.`;
+  return '';
+}
+// a coupon counts as used once its order is real: Cash on Delivery placed, or online payment received
+function countCouponUse(order) {
+  if (!order.coupon || order.couponCounted) return;
+  const c = db.coupons.find(x => x.code === order.coupon);
+  order.couponCounted = true;
+  if (c) { c.used = (c.used || 0) + 1; counterMoved('coupons', c.id, 'used', 1); }
+}
+
 function priceCart(lines, { code, method } = {}) {
   const subtotal = lines.reduce((s, l) => s + l.p.price * l.qty, 0);
   const mrpTotal = lines.reduce((s, l) => s + Math.max(l.p.mrp, l.p.price) * l.qty, 0);
   const units = lines.reduce((s, l) => s + l.qty, 0);
-  const discounts = [];
-  let amount = subtotal;
-  const take = (label, value) => { const d = Math.min(amount, Math.round(value)); if (d > 0) { discounts.push({ label, amount: d }); amount -= d; } };
-
   const tiers = bulkTiers();
   const tier = tiers.filter(t => units >= t.qty).pop();
-  if (tier) take(`Buy ${tier.qty}+ offer (${tier.percent}% off)`, amount * tier.percent / 100);
-
-  let coupon = null, couponError = '';
-  code = str(code, 30).toUpperCase();
-  if (code) {
-    const c = db.coupons.find(x => x.code === code);
-    couponError = couponProblem(c, amount);
-    if (!couponError) { coupon = c; take(`Coupon ${c.code}`, c.type === 'percent' ? amount * c.value / 100 : c.value); }
-  }
+  code = couponCode(code);
+  const c = code ? db.coupons.find(x => x.code === code) : null;
   const pp = db.settings.prepaidPercent || 0;
-  if (pp > 0 && method && method !== 'cod') take(`Online payment offer (${pp}% off)`, amount * pp / 100);
 
-  const shipping = lines.length ? shippingFor(amount) : 0;
+  // works out the bill with or without the buy-more offer / the coupon
+  function run(useTier, useCoupon) {
+    const discounts = [];
+    let amount = subtotal, coupon = null, couponError = '', freeShip = false;
+    const take = (label, value) => { const d = Math.min(amount, Math.round(value)); if (d > 0) { discounts.push({ label, amount: d }); amount -= d; } };
+    if (useTier && tier) take(`Buy ${tier.qty}+ offer (${tier.percent}% off)`, amount * tier.percent / 100);
+    if (useCoupon && code) {
+      // only the chosen products count towards the coupon (all products when none are chosen)
+      const base = c && c.products && c.products.length ? lines.filter(l => c.products.includes(l.p.id)).reduce((s, l) => s + l.p.price * l.qty, 0) : subtotal;
+      const eligible = subtotal ? base * amount / subtotal : 0; // after the buy-more discount
+      couponError = couponProblem(c, amount, eligible);
+      if (!couponError) {
+        coupon = c;
+        if (c.type === 'shipping') freeShip = true;
+        else {
+          let off = c.type === 'percent' ? eligible * c.value / 100 : Math.min(c.value, eligible);
+          if (c.type === 'percent' && c.maxDiscount > 0) off = Math.min(off, c.maxDiscount);
+          take(`Coupon ${c.code}`, off);
+        }
+      }
+    }
+    if (pp > 0 && method && method !== 'cod') take(`Online payment offer (${pp}% off)`, amount * pp / 100);
+    const normalShipping = lines.length ? shippingFor(amount) : 0;
+    if (freeShip && normalShipping) discounts.push({ label: `Coupon ${c.code} (free delivery)`, amount: normalShipping, shipping: true });
+    const shipping = freeShip ? 0 : normalShipping;
+    return { discounts, amount, shipping, total: amount + shipping, coupon, couponError };
+  }
+
+  let r = run(true, true), note = '';
+  // a coupon that can't be combined: the shopper automatically gets whichever deal is better
+  if (c && r.coupon && c.combine === false && tier) {
+    const tierOnly = run(true, false), couponOnly = run(false, true);
+    if (tierOnly.total <= couponOnly.total) {
+      r = { ...tierOnly, couponError: `Your Buy ${tier.qty}+ offer saves more than coupon ${c.code}, so we kept the better deal (they can't be combined).` };
+    } else { r = couponOnly; note = `Coupon ${c.code} can't be combined with the Buy-more offer, so only the coupon is applied.`; }
+  }
   const next = tiers.find(t => t.qty > units);
   return {
-    subtotal, discounts, shipping, total: amount + shipping, coupon, couponError,
-    saved: (mrpTotal - subtotal) + discounts.reduce((s, d) => s + d.amount, 0),
+    subtotal, discounts: r.discounts, shipping: r.shipping, total: r.total, coupon: r.coupon, couponError: r.couponError, couponNote: note,
+    saved: (mrpTotal - subtotal) + r.discounts.reduce((s, d) => s + d.amount, 0),
     nextTier: next && units ? { need: next.qty - units, percent: next.percent } : null,
-    freeShippingGap: db.settings.freeShippingAbove > 0 && shipping > 0 ? db.settings.freeShippingAbove - amount : 0
+    freeShippingGap: db.settings.freeShippingAbove > 0 && r.shipping > 0 ? db.settings.freeShippingAbove - r.amount : 0
   };
 }
 
@@ -417,7 +471,9 @@ app.post('/api/cart/quote', (req, res) => {
   res.json({
     lines: lines.map(l => ({ ...publicProduct(l.p), qty: l.qty })),
     subtotal: q.subtotal, discounts: q.discounts, shipping: q.shipping, total: q.total, saved: q.saved,
-    coupon: q.coupon ? q.coupon.code : '', couponError: q.couponError,
+    coupon: q.coupon ? q.coupon.code : '', couponError: q.couponError, couponNote: q.couponNote,
+    couponSummary: q.coupon ? (q.coupon.label || couponSummary(q.coupon)) : '',
+    offers: visibleCoupons().map(c => ({ code: c.code, summary: c.label || couponSummary(c) })),
     nextTier: q.nextTier, freeShippingGap: q.freeShippingGap, prepaidPercent: db.settings.prepaidPercent || 0
   });
 });
@@ -528,6 +584,7 @@ function markPaid(o) {
   o.paidAt = new Date().toISOString();
   if (o.status === 'pending') o.status = 'new';
   takeStock(o);
+  countCouponUse(o);
   save();
 }
 async function confirmPayment(o) {
@@ -578,7 +635,9 @@ app.post('/api/orders', async (req, res) => {
   if (!lines.length) return res.status(400).json({ error: 'Your cart is empty.' });
 
   const q = priceCart(lines, { code: b.code, method: method.id });
-  if (b.code && q.couponError) return res.status(400).json({ error: q.couponError });
+  if (b.code && q.couponError && !q.coupon && !/kept the better deal/.test(q.couponError)) return res.status(400).json({ error: q.couponError, field: 'coupon' });
+  const customerProblem = couponCustomerProblem(q.coupon, customer.phone);
+  if (customerProblem) return res.status(400).json({ error: customerProblem + ' Please remove it to continue.', field: 'coupon' });
   const { subtotal, shipping } = q;
   const online = method.id !== 'cod';
   const order = {
@@ -594,10 +653,9 @@ app.post('/api/orders', async (req, res) => {
     items: lines.map(l => ({ id: l.p.id, name: l.p.name, size: l.p.size, price: l.p.price, qty: l.qty, image: l.p.images[0] || '' })),
     subtotal, discounts: q.discounts, coupon: q.coupon ? q.coupon.code : '', shipping, total: q.total
   };
-  if (q.coupon) q.coupon.used++;
-
   if (!online) {
     takeStock(order);
+    countCouponUse(order);
     db.orders.unshift(order);
     save();
     return res.json({ ok: true, url: '/order/' + order.key, number: order.number });
@@ -802,18 +860,57 @@ app.delete('/api/admin/products/:id', (req, res) => {
 
 // offers: coupons + automatic discounts
 const isoOrBlank = v => { const t = Date.parse(str(v, 40)); return Number.isFinite(t) ? new Date(t).toISOString() : ''; };
+// the rules of a coupon (everything except its code), checked before anything is saved
+function couponRules(b) {
+  const type = ['flat', 'shipping'].includes(b.type) ? b.type : 'percent';
+  const value = type === 'shipping' ? 0 : num(b.value, 0, type === 'percent' ? 90 : 100000);
+  if (type !== 'shipping' && !value) throw new Error('Enter how much discount the coupon gives.');
+  const starts = isoOrBlank(b.starts), expires = isoOrBlank(b.expires);
+  if (starts && expires && Date.parse(expires) <= Date.parse(starts)) throw new Error('The end date must be after the start date.');
+  const products = (Array.isArray(b.products) ? b.products : []).filter(id => db.products.some(p => p.id === id));
+  return {
+    type, value, products, starts, expires,
+    label: str(b.label, 80),
+    maxDiscount: type === 'percent' ? num(b.maxDiscount, 0, 100000) : 0,
+    minOrder: num(b.minOrder, 0, 1e6),
+    maxUses: Math.floor(num(b.maxUses, 0, 1e6)),
+    perCustomer: Math.floor(num(b.perCustomer, 0, 100)),
+    firstOrder: !!b.firstOrder,
+    combine: b.combine !== false,
+    active: b.active !== false,
+    showOnSite: !!b.showOnSite
+  };
+}
 function couponFrom(b, existing) {
-  const code = str(b.code, 30).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const code = couponCode(b.code);
   if (code.length < 3) throw new Error('Coupon code needs at least 3 letters or numbers.');
   if (db.coupons.some(c => c.code === code && c !== existing)) throw new Error('That coupon code already exists.');
-  const type = b.type === 'flat' ? 'flat' : 'percent';
-  const value = num(b.value, 0, type === 'percent' ? 90 : 100000);
-  if (!value) throw new Error('Enter how much discount the coupon gives.');
+  const rules = couponRules(b);
   const c = existing || { id: crypto.randomUUID(), used: 0, createdAt: new Date().toISOString() };
-  Object.assign(c, { code, type, value, minOrder: num(b.minOrder, 0, 1e6), maxUses: Math.floor(num(b.maxUses, 0, 1e6)), expires: isoOrBlank(b.expires), active: b.active !== false, showOnSite: !!b.showOnSite });
-  return c;
+  return Object.assign(c, rules, { code });
 }
-const offersView = () => ({ coupons: db.coupons, bulkTiers: db.settings.bulkTiers, prepaidPercent: db.settings.prepaidPercent, trustLines: db.settings.trustLines });
+// random codes that are easy to read out over the phone: no 0/O, 1/I/L
+const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const randomCode = (prefix, len) => couponCode(prefix) + Array.from(crypto.randomBytes(len), b => CODE_CHARS[b % CODE_CHARS.length]).join('');
+function uniqueCode(prefix, len) {
+  for (let i = 0; i < 50; i++) { const c = randomCode(prefix, len); if (!db.coupons.some(x => x.code === c)) return c; }
+  throw new Error('Could not make a unique code — try a longer code length.');
+}
+// how each coupon has performed (paid / Cash on Delivery orders only)
+function couponStats() {
+  const stats = {};
+  for (const o of db.orders) {
+    if (!o.coupon || ['cancelled', 'pending'].includes(o.status)) continue;
+    const s = stats[o.coupon] || (stats[o.coupon] = { orders: 0, revenue: 0, discount: 0 });
+    s.orders++; s.revenue += o.total;
+    s.discount += (o.discounts || []).filter(d => d.label.startsWith('Coupon ')).reduce((t, d) => t + d.amount, 0);
+  }
+  return stats;
+}
+const offersView = () => ({
+  coupons: db.coupons, stats: couponStats(), products: db.products.map(p => ({ id: p.id, name: p.name, price: p.price })),
+  bulkTiers: db.settings.bulkTiers, prepaidPercent: db.settings.prepaidPercent, trustLines: db.settings.trustLines
+});
 app.get('/api/admin/offers', (req, res) => res.json(offersView()));
 app.put('/api/admin/offers', (req, res) => {
   const b = req.body || {};
@@ -826,11 +923,53 @@ app.post('/api/admin/coupons', (req, res) => {
   try { db.coupons.push(couponFrom(req.body || {})); save(); res.json(offersView()); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });
+// generator: one new random code, or a batch of single-use codes (e.g. for influencers or WhatsApp customers)
+app.post('/api/admin/coupons/generate', (req, res) => {
+  const b = req.body || {};
+  const count = Math.floor(num(b.count, 1, 500)), len = Math.floor(num(b.length, 4, 12)), prefix = couponCode(b.prefix).slice(0, 12);
+  if (!b.create) { try { return res.json({ code: uniqueCode(prefix, len) }); } catch (e) { return res.status(400).json({ error: e.message }); } }
+  let rules;
+  try { rules = couponRules(b); } catch (e) { return res.status(400).json({ error: e.message }); }
+  const batch = crypto.randomBytes(6).toString('hex'), batchName = str(b.batchName, 60) || `${prefix || 'Batch'} × ${count}`;
+  const codes = [];
+  try {
+    for (let i = 0; i < count; i++) {
+      const code = uniqueCode(prefix, len);
+      // every code in a batch works once, so a shared or leaked code can't be reused
+      db.coupons.push({ id: crypto.randomUUID(), used: 0, createdAt: new Date().toISOString(), ...rules, maxUses: 1, perCustomer: 0, showOnSite: false, code, batch, batchName });
+      codes.push(code);
+    }
+  } catch (e) { return res.status(400).json({ error: e.message }); }
+  res.json({ ...offersView(), codes, batch });
+});
+// validator: try a code against a sample cart, exactly as a shopper would at checkout
+app.post('/api/admin/coupons/check', (req, res) => {
+  const b = req.body || {};
+  const code = couponCode(b.code);
+  if (!code) return res.status(400).json({ error: 'Enter a coupon code to check.' });
+  const p = db.products.find(x => x.id === b.productId) || db.products[0];
+  if (!p) return res.status(400).json({ error: 'Add a product first.' });
+  const qty = Math.floor(num(b.qty, 1, 99));
+  const q = priceCart([{ p, qty }], { code, method: str(b.method, 20) });
+  const c = db.coupons.find(x => x.code === code);
+  const customer = b.phone ? couponCustomerProblem(q.coupon, b.phone) : '';
+  res.json({
+    code, exists: !!c, valid: !!q.coupon && !customer, error: customer || q.couponError || '', note: q.couponNote || '',
+    summary: c ? (c.label || couponSummary(c)) : '', used: c ? c.used : 0, maxUses: c ? c.maxUses : 0,
+    cart: `${qty} × ${p.name} (${'₹' + p.price} each)`, subtotal: q.subtotal, discounts: q.discounts, shipping: q.shipping, total: q.total
+  });
+});
 app.put('/api/admin/coupons/:id', (req, res) => {
   const c = db.coupons.find(x => x.id === req.params.id);
   if (!c) return res.status(404).json({ error: 'Coupon not found.' });
+  // quick on/off switch from the list
+  if (Object.keys(req.body || {}).join() === 'active') { c.active = !!req.body.active; save(); return res.json(offersView()); }
   try { couponFrom(req.body || {}, c); save(); res.json(offersView()); }
   catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.delete('/api/admin/coupons/batch/:batch', (req, res) => {
+  db.coupons = db.coupons.filter(x => x.batch !== req.params.batch);
+  save(); res.json(offersView());
 });
 app.delete('/api/admin/coupons/:id', (req, res) => {
   db.coupons = db.coupons.filter(x => x.id !== req.params.id);
@@ -847,7 +986,7 @@ app.put('/api/admin/orders/:id', (req, res) => {
   if (!STATUSES.includes(status)) return res.status(400).json({ error: 'Invalid status.' });
   // stock goes back on cancel; it is taken (again) when an order becomes active
   if (status === 'cancelled') returnStock(o);
-  else if (status !== 'pending') takeStock(o);
+  else if (status !== 'pending') { takeStock(o); countCouponUse(o); }
   o.status = status;
   if ('adminNote' in (req.body || {})) o.adminNote = str(req.body.adminNote, 500);
   save(); res.json(o);

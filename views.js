@@ -546,7 +546,7 @@ function product(db, p, related, methods = [], offers = {}, rv = { list: [], sum
     </div>
 
     ${coupons.length ? `<div class="coupons">${coupons.map(c => `<button type="button" class="coupon" data-coupon="${esc(c.code)}">
-      <span><b>${c.type === 'percent' ? `${c.value}% off` : `${money(c.value)} off`}</b>${c.minOrder ? ` on orders above ${money(c.minOrder)}` : ''} — use code <code>${esc(c.code)}</code></span><em>Tap to apply</em></button>`).join('')}</div>` : ''}
+      <span><b>${esc(c.summary)}</b> — use code <code>${esc(c.code)}</code>${c.expires ? `<small class="coupon-ends" data-ends="${esc(c.expires)}">Ends ${esc(new Date(c.expires).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }))}</small>` : ''}</span><em>Tap to apply</em></button>`).join('')}</div>` : ''}
     ${s.prepaidPercent > 0 && methods.some(m => m.id !== 'cod') ? `<p class="assure">Pay online and get an extra ${s.prepaidPercent}% off at checkout.</p>` : ''}
     ${s.freeShippingAbove > 0 ? `<p class="assure">Free delivery on orders above ${money(s.freeShippingAbove)}.</p>` : !s.shippingFee ? '<p class="assure">Free delivery on every order.</p>' : ''}
 

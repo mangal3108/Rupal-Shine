@@ -729,3 +729,17 @@ body.has-sticky .toast { bottom: 92px; }
   .wm-text { font-size: 29px; }
   .icon-btn { width: 40px; height: 40px; }
 }
+
+/* coupons in cart & checkout */
+.coupon-box.applied > span { display: flex; align-items: center; gap: 10px; }
+.coupon-box.applied small { display: block; color: #3f6b41; font-size: 12px; margin-top: 1px; }
+.cb-tick { display: grid; place-items: center; width: 22px; height: 22px; flex: none; border-radius: 50%; background: var(--ok); color: #fff; font-style: normal; font-size: 12px; font-weight: 700; }
+.coupon-note { font-size: 12.5px; color: #8a6510; background: #fdf6e3; border-radius: 8px; padding: 7px 10px; margin: -6px 0 12px; }
+.coupon-offers { display: grid; gap: 8px; margin: -2px 0 16px; }
+.coupon-offers > span { font: 600 11.5px var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.offer-chip { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; width: 100%; text-align: left; background: #fffaf0; border: 1.5px dashed var(--gold); border-radius: 12px; padding: 9px 12px; cursor: pointer; font: inherit; color: var(--ink); transition: background .2s; }
+.offer-chip:hover { background: #fdf2d8; }
+.offer-chip b { font: 600 13px var(--sans); letter-spacing: .06em; color: var(--deep, #1f5130); background: #fff; border-radius: 6px; padding: 2px 8px; }
+.offer-chip small { font-size: 12.5px; color: #4b5650; line-height: 1.35; }
+.offer-chip em { font-style: normal; font-weight: 600; font-size: 12.5px; color: var(--cta, #d9480f); }
+.coupon-ends { display: block; font-size: 11.5px; color: var(--sale); margin-top: 2px; }
