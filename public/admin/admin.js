@@ -303,6 +303,12 @@
           ${field('Line under the photo', 'storyCaption', s.storyCaption)}
           <div class="field full"><span>Photo</span><div class="images" id="storyPick"></div></div>
         </div></div>
+        <div class="card"><h3>Home page — video</h3><div class="fields">
+          ${field('Small heading', 'videoKicker', s.videoKicker, { hint: 'Leave empty to show “Watch”.' })}
+          ${field('Heading', 'videoTitle', s.videoTitle, { hint: 'Leave empty to show “See how it is made”.' })}
+          ${field('Video link', 'videoUrl', s.videoUrl, { hint: 'Paste a YouTube link (or a direct .mp4 link). Leave empty to hide the video section.' })}
+          ${field('Text under the video', 'videoCaption', s.videoCaption)}
+        </div></div>
         <div class="card"><h3>Home page — highlights &amp; journey</h3><div class="fields">
           ${area('Highlight numbers — one per line', 'statsLines', s.statsLines, { rows: 3, hint: 'Format: Number: label — e.g. 9: Powerful herbs. Numbers count up when the visitor scrolls to them. Leave empty to hide.' })}
           ${field('Journey small heading', 'journeyKicker', s.journeyKicker)}

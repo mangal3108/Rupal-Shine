@@ -160,10 +160,12 @@ const STORY_DEFAULTS = {
   storyText: STORY_TEXT,
   storySign: 'Her son, Founder of Rupali Shine',
   storyCaption: 'In loving memory',
-  storyImage: '/uploads/rupali-mother.webp'
+  storyImage: '/uploads/rupali-mother-original.webp'
 };
 function prepareStory() {
 for (const k in STORY_DEFAULTS) if (db.settings[k] === undefined) db.settings[k] = STORY_DEFAULTS[k];
+// the first starter photo was a cropped copy; switch stores still using it to the original photo
+if (db.settings.storyImage === '/uploads/rupali-mother.webp') db.settings.storyImage = '/uploads/rupali-mother-original.webp';
 // first run after the story was added: tell it on the About page too (only if that page is still the starter text)
 const aboutPage = db.pages.find(p => p.slug === 'about');
 if (!db.storyAdded && aboutPage && aboutPage.content.startsWith('Rupali Shine is a handmade herbal hair care brand')) {
@@ -900,7 +902,9 @@ app.put('/api/admin/settings', (req, res) => {
   for (const k of ['siteName', 'announcement', 'heroKicker', 'heroTitle', 'heroCta', 'introKicker', 'introTitle', 'herbsTitle', 'email', 'phone', 'whatsapp', 'address', 'footerNote'])
     if (k in b) s[k] = str(b[k], 200);
   for (const k of ['heroSubtitle', 'introText']) if (k in b) s[k] = str(b[k], 600);
-  for (const k of ['journeyKicker', 'journeyTitle', 'storyKicker', 'storyTitle', 'storySign', 'storyCaption']) if (k in b) s[k] = str(b[k], 120);
+  for (const k of ['journeyKicker', 'journeyTitle', 'storyKicker', 'storyTitle', 'storySign', 'storyCaption', 'videoKicker', 'videoTitle']) if (k in b) s[k] = str(b[k], 120);
+  if ('videoCaption' in b) s.videoCaption = str(b.videoCaption, 300);
+  if ('videoUrl' in b) s.videoUrl = safeUrl(b.videoUrl);
   if ('storyText' in b) s.storyText = str(b.storyText, 3000);
   if ('storyImage' in b) s.storyImage = safeImage(b.storyImage);
   if ('statsLines' in b) s.statsLines = list(b.statsLines, 4).join('\n');

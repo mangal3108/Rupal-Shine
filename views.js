@@ -120,6 +120,31 @@ function card(p) {
   </article>`;
 }
 
+// "Good to know" strip under the story: only facts the store really offers
+const FACTS = ['Made in India', 'Cash on delivery available', 'Secure online payments', 'Delivered across India'];
+
+// Video section, set from the admin panel (Site settings → Video). Accepts a YouTube link or a
+// direct .mp4 / .webm link. Hidden when no link is set.
+function videoBlock(s, poster) {
+  const url = String(s.videoUrl || '');
+  if (!url) return '';
+  const yt = url.match(/(?:youtube\.com\/watch\?(?:.*&)?v=|youtu\.be\/|youtube\.com\/(?:shorts|embed)\/)([\w-]{6,})/);
+  let media = '';
+  if (yt) media = `<iframe src="https://www.youtube-nocookie.com/embed/${esc(yt[1])}" title="${esc(s.videoTitle || 'Video')}" loading="lazy" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+  else if (/\.(mp4|webm)(\?|$)/i.test(url)) media = `<video src="${esc(url)}" controls playsinline preload="metadata"${poster ? ` poster="${esc(poster)}"` : ''}></video>`;
+  if (!media) return '';
+  return `<section class="video-sec" id="video">
+  <div class="wrap video-row">
+    <div class="video-copy reveal">
+      <span class="kicker">${esc(s.videoKicker || 'Watch')}</span>
+      <h2>${esc(s.videoTitle || 'See how it is made')}</h2>
+      ${s.videoCaption ? `<p>${esc(s.videoCaption)}</p>` : ''}
+    </div>
+    <div class="video-frame reveal">${media}</div>
+  </div>
+</section>`;
+}
+
 function home(db, products) {
   const s = db.settings;
   const f = products.find(p => p.featured) || products[0];
@@ -180,7 +205,10 @@ ${s.storyText ? `<section class="story" id="story">
       ${s.storySign ? `<p class="story-sign">— ${esc(s.storySign)}</p>` : ''}
     </div>
   </div>
-</section>` : ''}
+</section>
+<ul class="facts" aria-label="Good to know">${FACTS.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+
+${videoBlock(s, f && f.images[0])}
 
 ${journey.length && f ? `<section class="journey" id="journey" data-journey style="--steps:${journey.length}">
   <div class="journey-stage">

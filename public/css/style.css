@@ -461,6 +461,31 @@ html:not(.js) .j-orb, html:not(.js) .j-progress { display: none; }
 .story-copy p { font-size: 17px; color: #4b5650; max-width: 560px; }
 .story-copy p:first-of-type::first-letter { font: 700 3.2em/.85 var(--serif); color: var(--gold); float: left; padding: 6px 10px 0 0; }
 .story-sign { font: italic 600 22px var(--serif) !important; color: var(--green) !important; margin-top: 22px; }
+.story-copy p { position: relative; }
+.story-copy p + p { margin-top: 16px; }
+.story-copy p:last-of-type { padding-left: 18px; border-left: 2px solid var(--gold); }
+.story-frame img { object-position: 50% 22%; }
+
+/* good-to-know strip */
+.facts { list-style: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 14px; margin: 0; padding: 26px 16px; background: var(--green); }
+.facts li { display: inline-flex; align-items: center; gap: 10px; color: #f3ead2; font-size: 14px; letter-spacing: .02em; padding: 8px 18px; border: 1px solid rgba(227, 198, 118, .45); border-radius: 999px; }
+.facts li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #e3c676; }
+
+/* video */
+.video-sec { background: #fff; padding: 84px 0 92px; }
+.video-row { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.4fr); gap: clamp(28px, 5vw, 64px); align-items: center; }
+.video-copy h2 { font-size: clamp(28px, 3.6vw, 44px); margin-bottom: 14px; }
+.video-copy p { color: var(--muted); font-size: 16px; max-width: 420px; }
+.video-frame { position: relative; aspect-ratio: 16 / 9; border-radius: 26px; overflow: hidden; background: #0d1f14; box-shadow: 0 30px 60px rgba(29, 58, 39, .22); border: 8px solid var(--cream); }
+.video-frame iframe, .video-frame video { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
+@media (max-width: 860px) {
+  .video-sec { padding: 56px 0 64px; }
+  .video-row { grid-template-columns: 1fr; }
+  .video-copy { text-align: center; }
+  .video-copy p { margin: 0 auto; }
+  .video-frame { border-width: 5px; border-radius: 18px; }
+  .facts li { font-size: 13px; }
+}
 @media (max-width: 760px) {
   .story { padding: 56px 0 64px; }
   .story-row { grid-template-columns: 1fr; }
