@@ -368,11 +368,26 @@
       const s = await api('GET', '/settings');
       const hero = s.heroImage ? [s.heroImage] : [], logo = s.logoImage ? [s.logoImage] : [];
       main.innerHTML = `<form id="setForm"><div class="top"><h1>Site Settings</h1><button class="btn">Save changes</button></div>
-        <div class="card"><h3>Brand</h3><div class="fields">
+        <div class="card"><h3>Header &amp; logo</h3><div class="fields">
           ${field('Store name', 'siteName', s.siteName)}
-          ${field('Top announcement bar', 'announcement', s.announcement, { hint: 'Leave empty to hide.' })}
-          <div class="field full"><span>Logo image (optional — the store name is shown if empty)</span><div class="images" id="logoPick"></div></div>
+          ${field('Top announcement bar', 'announcement', s.announcement, { hint: 'The line above the header, e.g. “Purely herbal, made by hand.” Leave empty to hide.' })}
+          <label class="field"><span>Logo style</span><select name="logoStyle">
+            <option value="script"${s.logoStyle !== 'image' ? ' selected' : ''}>Handwritten wordmark</option>
+            <option value="image"${s.logoStyle === 'image' ? ' selected' : ''}>Uploaded logo image</option>
+          </select><small>The wordmark writes your name in an elegant script font with a swash underline.</small></label>
+          ${field('Wordmark text', 'logoText', s.logoText, { hint: 'Leave empty to use the store name.', attrs: `placeholder="${esc(s.siteName)}" maxlength="40"` })}
+          <div class="field"><span>Wordmark</span>${check('Show ™ after the name', 'logoTm', s.logoTm !== false)}</div>
+          <div class="field full"><span>Logo image (used when “Uploaded logo image” is chosen)</span><div class="images" id="logoPick"></div></div>
           ${field('Footer note', 'footerNote', s.footerNote, { full: true })}
+        </div></div>
+        <div class="card"><h3>WhatsApp chat button</h3><div class="fields">
+          <div class="field"><span>Show the button</span>${check('Show the WhatsApp chat button on the website', 'waEnabled', s.waEnabled !== false)}</div>
+          ${field('WhatsApp number', 'whatsapp', s.whatsapp, { hint: 'Your WhatsApp number with country code, e.g. 919876543210 (a 10-digit mobile gets +91 added). The button only appears when this is filled.', attrs: 'inputmode="numeric" maxlength="16"' })}
+          ${area('Message typed in for the customer', 'waMessage', s.waMessage, { rows: 2, hint: 'Opens in WhatsApp ready to send. On a product page the product name is added automatically.' })}
+          ${field('Button text', 'waLabel', s.waLabel, { hint: 'Shown next to the icon on computers. Leave empty for the round icon only.', attrs: 'maxlength="40"' })}
+          <label class="field"><span>Button position</span><select name="waPosition"><option value="right"${s.waPosition !== 'left' ? ' selected' : ''}>Bottom right</option><option value="left"${s.waPosition === 'left' ? ' selected' : ''}>Bottom left</option></select></label>
+          ${area('Greeting bubble', 'waBubble', s.waBubble, { rows: 2, hint: 'A small message that pops up once, a few seconds after a visitor arrives. Leave empty to turn it off.' })}
+          ${s.whatsapp ? `<div class="field full"><span>Test it</span><a class="btn ghost sm" href="https://wa.me/${esc(s.whatsapp)}" target="_blank" rel="noopener">Open my WhatsApp chat link ↗</a></div>` : ''}
         </div></div>
         <div class="card"><h3>Home page</h3><div class="fields">
           ${field('Hero small heading', 'heroKicker', s.heroKicker)}
@@ -413,7 +428,6 @@
         <div class="card"><h3>Contact details</h3><div class="fields">
           ${field('Email', 'email', s.email, { type: 'email' })}
           ${field('Phone', 'phone', s.phone)}
-          ${field('WhatsApp number', 'whatsapp', s.whatsapp, { hint: 'With country code, e.g. 919876543210. Shows a WhatsApp chat button.' })}
           ${field('Address', 'address', s.address)}
           ${field('Instagram link', 'instagram', s.instagram, { type: 'url', attrs: 'placeholder="https://"' })}
           ${field('Facebook link', 'facebook', s.facebook, { type: 'url', attrs: 'placeholder="https://"' })}

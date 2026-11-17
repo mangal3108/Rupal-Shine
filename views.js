@@ -17,6 +17,10 @@ function step(line) {
 }
 
 const ICON = {
+  bag: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1 12.2a1 1 0 0 1-1 .8H7a1 1 0 0 1-1-.8z"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/></svg>',
+  menu: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>',
+  close: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+  wa: '<svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><path fill="currentColor" d="M16 3.2A12.8 12.8 0 0 0 5 22.4L3.3 28.7l6.5-1.7A12.8 12.8 0 1 0 16 3.2zm0 23.3c-2 0-3.9-.5-5.5-1.5l-.4-.2-3.9 1 1-3.8-.2-.4A10.6 10.6 0 1 1 16 26.5z"/><path fill="currentColor" d="M21.8 18.6c-.3-.2-1.9-.9-2.2-1-.3-.1-.5-.2-.7.2l-1 1.2c-.2.2-.4.2-.7.1-.3-.2-1.4-.5-2.6-1.6-1-.9-1.6-1.9-1.8-2.2-.2-.3 0-.5.1-.7l.5-.6.3-.5c.1-.2.1-.4 0-.6l-1-2.4c-.3-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.3-1.2 1.1-1.2 2.8s1.2 3.2 1.4 3.5c.2.2 2.4 3.6 5.7 5 2.8 1.1 3.4.9 4 .8.6-.1 1.9-.8 2.2-1.5.3-.8.3-1.4.2-1.5-.1-.2-.3-.2-.6-.4z"/></svg>',
   cart: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h13l-1.5 9h-10z"/><path d="M6 7 5.3 4H3"/><circle cx="9" cy="20" r="1.2"/><circle cx="16.5" cy="20" r="1.2"/></svg>',
   arrow: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
   down: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
@@ -32,6 +36,11 @@ const ICON = {
 };
 
 function logo(s) {
+  // handwritten wordmark (default) or the uploaded logo image — chosen in Admin → Site settings → Header & logo
+  if (s.logoStyle !== 'image' || !s.logoImage) {
+    const word = String(s.logoText || s.siteName || '').trim();
+    return `<span class="wordmark"><span class="wm-text">${esc(word)}</span>${s.logoTm !== false ? '<sup>™</sup>' : ''}<svg class="wm-swash" viewBox="0 0 220 14" preserveAspectRatio="none" aria-hidden="true"><path d="M6 9 C 50 3, 120 2, 160 6 S 205 10, 214 4"/></svg><span class="wm-leaf" aria-hidden="true">${ICON.leaf}</span></span>`;
+  }
   if (s.logoImage) return `<img src="${esc(s.logoImage)}" alt="${esc(s.siteName)}" class="logo-img">`;
   const parts = s.siteName.trim().split(/\s+/);
   const first = parts.shift();
@@ -42,12 +51,29 @@ function logo(s) {
 const fs = require('fs'), path = require('path');
 const asset = p => { try { return p + '?v=' + Math.round(fs.statSync(path.join(__dirname, 'public', p)).mtimeMs).toString(36); } catch (e) { return p; } };
 
-function layout(db, title, body, { desc = '', path = '' } = {}) {
+// WhatsApp chat link with the greeting typed in for the customer; on a product page it names the product
+function waLink(s, about = '') {
+  const num = String(s.whatsapp || '').replace(/\D/g, '');
+  if (!num) return '';
+  const msg = [String(s.waMessage || '').trim(), about ? `Product: ${about}` : ''].filter(Boolean).join('\n');
+  return 'https://wa.me/' + num + (msg ? '?text=' + encodeURIComponent(msg) : '');
+}
+function waButton(s, about) {
+  const link = waLink(s, about);
+  if (!link || s.waEnabled === false) return '';
+  const left = s.waPosition === 'left';
+  return `<div class="wa-float${left ? ' left' : ''}" data-wa>
+  ${s.waBubble ? `<div class="wa-bubble" data-wa-bubble hidden><button type="button" class="wa-x" data-wa-close aria-label="Close">×</button><b>${esc(s.siteName)}</b><p>${esc(s.waBubble)}</p><a href="${esc(link)}" target="_blank" rel="noopener">Start chat →</a></div>` : ''}
+  <a class="wa-btn" href="${esc(link)}" target="_blank" rel="noopener" aria-label="${esc(s.waLabel || 'Chat on WhatsApp')}">${ICON.wa}${s.waLabel ? `<span>${esc(s.waLabel)}</span>` : ''}</a>
+</div>`;
+}
+
+function layout(db, title, body, { desc = '', path = '', about = '' } = {}) {
   const s = db.settings;
   const menuPages = db.pages.filter(p => p.showInMenu);
   const footPages = db.pages.filter(p => p.showInFooter);
   const nav = [['/', 'Home'], ['/shop', 'Shop'], ...menuPages.map(p => ['/page/' + p.slug, p.title]), ['/contact', 'Contact']];
-  const wa = s.whatsapp ? 'https://wa.me/' + s.whatsapp.replace(/\D/g, '') : '';
+  const wa = waLink(s);
   const social = [['instagram', 'Instagram'], ['facebook', 'Facebook'], ['youtube', 'YouTube']].filter(([k]) => s[k]);
   return `<!doctype html>
 <html lang="en">
@@ -58,22 +84,39 @@ function layout(db, title, body, { desc = '', path = '' } = {}) {
 <meta name="description" content="${esc(desc || s.heroSubtitle)}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Great+Vibes&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="${asset('/css/style.css')}">
 <script>document.documentElement.classList.add("js")</script>
 </head>
 <body>
-${s.announcement ? `<div class="announce">${esc(s.announcement)}</div>` : ''}
-<header class="site-header">
+${s.announcement ? `<div class="announce"><span>${esc(s.announcement)}</span></div>` : ''}
+<header class="site-header" data-header>
   <div class="wrap header-row">
+    <div class="h-side h-left">
+      <button class="icon-btn menu-btn" type="button" aria-label="Open menu" aria-controls="drawer" aria-expanded="false" data-menu-open>${ICON.menu}</button>
+      <nav class="h-nav" aria-label="Main">
+        ${nav.map(([href, label]) => `<a href="${esc(href)}"${href === path ? ' class="on" aria-current="page"' : ''}>${esc(label)}</a>`).join('')}
+      </nav>
+    </div>
     <a class="logo" href="/" aria-label="${esc(s.siteName)} home">${logo(s)}</a>
-    <nav class="pill-nav" id="nav">
-      ${nav.map(([href, label]) => `<a href="${esc(href)}"${href === path ? ' class="on"' : ''}>${esc(label)}</a>`).join('')}
-    </nav>
-    <a class="cart-btn" href="/cart" aria-label="Cart">${ICON.cart}<span class="cart-count" data-cart-count hidden>0</span></a>
-    <button class="menu-btn" aria-label="Menu" onclick="document.getElementById('nav').classList.toggle('open')"><span></span><span></span><span></span></button>
+    <div class="h-side h-right">
+      ${wa && s.waEnabled !== false ? `<a class="icon-btn h-wa" href="${esc(wa)}" target="_blank" rel="noopener" aria-label="Chat on WhatsApp">${ICON.wa}</a>` : ''}
+      <a class="icon-btn cart-btn" href="/cart" aria-label="Cart">${ICON.bag}<span class="cart-count" data-cart-count hidden>0</span></a>
+    </div>
   </div>
 </header>
+<div class="drawer" id="drawer" data-drawer hidden>
+  <div class="drawer-shade" data-menu-close></div>
+  <aside class="drawer-panel" role="dialog" aria-modal="true" aria-label="Menu">
+    <div class="drawer-head"><a class="logo" href="/">${logo(s)}</a><button class="icon-btn" type="button" aria-label="Close menu" data-menu-close>${ICON.close}</button></div>
+    <nav class="drawer-nav">${nav.map(([href, label]) => `<a href="${esc(href)}"${href === path ? ' class="on" aria-current="page"' : ''}>${esc(label)}<span>${ICON.arrow}</span></a>`).join('')}</nav>
+    <div class="drawer-foot">
+      ${wa && s.waEnabled !== false ? `<a class="btn drawer-wa" href="${esc(wa)}" target="_blank" rel="noopener">${ICON.wa} Chat on WhatsApp</a>` : ''}
+      ${s.phone ? `<a href="tel:${esc(s.phone.replace(/\s/g, ''))}">Call ${esc(s.phone)}</a>` : ''}
+      ${s.email ? `<a href="mailto:${esc(s.email)}">${esc(s.email)}</a>` : ''}
+    </div>
+  </aside>
+</div>
 <main>${body}</main>
 <footer class="site-footer">
   <div class="wrap footer-grid">
@@ -99,7 +142,7 @@ ${s.announcement ? `<div class="announce">${esc(s.announcement)}</div>` : ''}
   </div>
   <div class="wrap copyright">© ${new Date().getFullYear()} ${esc(s.siteName)}. All rights reserved.</div>
 </footer>
-${wa ? `<a class="wa-float" href="${esc(wa)}" target="_blank" rel="noopener" aria-label="Chat on WhatsApp"><svg viewBox="0 0 32 32" width="28" height="28" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"><path d="M16 4a12 12 0 0 0-10 18l-2 6 6-2a12 12 0 1 0 6-22z"/><path fill="#fff" stroke="none" d="M11 11c0 6 4 10 10 10l1-3-3-2-1 1c-2-1-3-2-4-4l1-1-2-3z"/></svg></a>` : ''}
+${waButton(s, about)}
 <div class="toast" id="toast" hidden></div>
 <script src="${asset('/js/shop.js')}"></script>
 <script src="${asset('/js/fx.js')}" defer></script>
@@ -520,7 +563,7 @@ function product(db, p, related, methods = [], offers = {}, rv = { list: [], sum
 ${reviewsSection(p, rv)}
 ${related.length ? `<section class="wrap products-sec"><h2 class="section-title">You may also like</h2><div class="grid">${related.map(card).join('')}</div></section>` : ''}
 ${inStock ? stickyBuy(p, rv.summary, { qtyFrom: 'qty', watch: '#buyRow' }) : ''}`;
-  return layout(db, p.name, body, { desc: p.shortDesc });
+  return layout(db, p.name, body, { desc: p.shortDesc, about: p.name });
 }
 
 function cart(db) {

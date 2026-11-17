@@ -153,6 +153,13 @@ for (const p of db.products) {
 db.spinOrdered = true;
 db.coupons = db.coupons || [];
 db.reviews = db.reviews || [];
+// header & logo, WhatsApp chat button
+for (const [k, v] of Object.entries({
+  logoStyle: 'script', logoText: '', logoTm: true,
+  waEnabled: true, waLabel: 'Chat with us', waPosition: 'right',
+  waMessage: 'Hello! I have a question about Rupali Shine Herbal Oil.',
+  waBubble: 'Hi! Have a question about the oil or your order? Chat with us on WhatsApp.'
+})) if (db.settings[k] === undefined) db.settings[k] = v;
 }
 const STORY_TEXT = 'Long before there was a label or a bottle, there was my mother, making this oil with her own hands. Jatamansi, brahmi, amla, bhringraj, hibiscus — every herb in it was her choice.\n\nShe is no longer with us. But her recipe is, and so is the care she put into it. I started Rupali Shine so that her oil would not end with her — so that it could reach more homes than she ever could.\n\nHer picture is on every bottle, because every bottle is still hers.';
 // same story with key phrases in **bold** for the home page
@@ -1017,6 +1024,13 @@ app.put('/api/admin/settings', (req, res) => {
   const b = req.body || {}, s = db.settings;
   if (str(b.videoUrl) && !VIDEO_LINK.test(str(b.videoUrl)))
     return res.status(400).json({ error: 'The video link must be a YouTube link (e.g. https://youtu.be/…) or a direct .mp4 / .webm link.' });
+  // checked before anything is changed, so a wrong number never half-saves the form
+  let waNumber;
+  if ('whatsapp' in b) {
+    waNumber = str(b.whatsapp, 20).replace(/\D/g, '');
+    if (waNumber.length === 10) waNumber = '91' + waNumber; // a 10-digit Indian mobile gets the country code added
+    if (waNumber && (waNumber.length < 11 || waNumber.length > 15)) return res.status(400).json({ error: 'WhatsApp number: enter it with the country code, e.g. 919876543210.' });
+  }
   for (const k of ['siteName', 'announcement', 'heroKicker', 'heroTitle', 'heroCta', 'introKicker', 'introTitle', 'herbsTitle', 'email', 'phone', 'whatsapp', 'address', 'footerNote'])
     if (k in b) s[k] = str(b[k], 200);
   for (const k of ['heroSubtitle', 'introText']) if (k in b) s[k] = str(b[k], 600);
@@ -1029,6 +1043,13 @@ app.put('/api/admin/settings', (req, res) => {
   if ('statsLines' in b) s.statsLines = list(b.statsLines, 4).join('\n');
   if ('journeySteps' in b) s.journeySteps = list(b.journeySteps, 5).join('\n');
   for (const k of ['heroImage', 'logoImage']) if (k in b) s[k] = safeImage(b[k]);
+  if ('logoStyle' in b) s.logoStyle = b.logoStyle === 'image' ? 'image' : 'script';
+  if ('logoText' in b) s.logoText = str(b.logoText, 40);
+  if ('waPosition' in b) s.waPosition = b.waPosition === 'left' ? 'left' : 'right';
+  for (const k of ['logoTm', 'waEnabled']) if (k in b) s[k] = !!b[k];
+  if ('waLabel' in b) s.waLabel = str(b.waLabel, 40);
+  for (const k of ['waMessage', 'waBubble']) if (k in b) s[k] = str(b[k], 300);
+  if (waNumber !== undefined) s.whatsapp = waNumber;
   for (const k of ['instagram', 'facebook', 'youtube']) if (k in b) s[k] = safeUrl(b[k]);
   if ('shippingFee' in b) s.shippingFee = num(b.shippingFee, 0, 10000);
   if ('freeShippingAbove' in b) s.freeShippingAbove = num(b.freeShippingAbove, 0, 1e6);

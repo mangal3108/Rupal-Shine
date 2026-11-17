@@ -348,6 +348,37 @@
     } catch (err) { showError(err.message); }
   });
 
+  /* ---------- header: shadow once scrolled, slide-in menu ---------- */
+  const header = $('[data-header]');
+  if (header) {
+    const onScroll = () => header.classList.toggle('scrolled', window.scrollY > 8);
+    window.addEventListener('scroll', onScroll, { passive: true }); onScroll();
+  }
+  const drawer = $('[data-drawer]'), opener = $('[data-menu-open]');
+  if (drawer && opener) {
+    const setOpen = on => {
+      if (on) { drawer.hidden = false; requestAnimationFrame(() => drawer.classList.add('open')); }
+      else { drawer.classList.remove('open'); setTimeout(() => { if (!drawer.classList.contains('open')) drawer.hidden = true; }, 350); }
+      document.body.classList.toggle('menu-open', on);
+      opener.setAttribute('aria-expanded', on);
+      (on ? $('.drawer-nav a', drawer) : opener).focus({ preventScroll: true });
+    };
+    opener.addEventListener('click', () => setOpen(true));
+    drawer.addEventListener('click', e => { if (e.target.closest('[data-menu-close]')) setOpen(false); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && drawer.classList.contains('open')) setOpen(false); });
+  }
+
+  /* ---------- WhatsApp greeting bubble: pops up once, a few seconds after arrival ---------- */
+  const bubble = $('[data-wa-bubble]');
+  if (bubble) {
+    const KEY = 'rs_wa_bubble', seen = store.get(KEY, 0);
+    if (!seen || Date.now() - seen > 3 * 864e5) { // at most once every 3 days
+      setTimeout(() => { bubble.hidden = false; store.set(KEY, Date.now()); }, 6000);
+    }
+    bubble.addEventListener('click', e => { if (e.target.closest('[data-wa-close]')) bubble.hidden = true; });
+    $('.wa-btn').addEventListener('click', () => { bubble.hidden = true; });
+  }
+
   /* ---------- video section slideshow (shown until a video link is added) ---------- */
   const montage = $('[data-montage]');
   if (montage) {
