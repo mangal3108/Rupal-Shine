@@ -331,5 +331,55 @@
     } catch (err) { showError(err.message); }
   });
 
+  /* ---------- reviews (product page) ---------- */
+  const rform = $('#reviewForm');
+  if (rform) {
+    const WORDS = ['', 'Poor', 'Not great', 'Okay', 'Good', 'Loved it!'];
+    const label = $('[data-rate-label]', rform), pick = $('.rv-pick', rform);
+    const rErr = $('[data-review-error]');
+    const thanks = $('[data-review-thanks]');
+    const fieldErr = (name, msg) => {
+      const box = $(`[data-field="${name}"]`, rform); if (!box) return;
+      box.classList.toggle('bad', !!msg);
+      const e = $('.err', box); e.textContent = msg || ''; e.hidden = !msg;
+    };
+    rform.addEventListener('change', e => {
+      if (e.target.name === 'rating') { label.textContent = WORDS[e.target.value]; pick.classList.remove('bad'); }
+    });
+    rform.elements.phone.addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10); });
+    document.addEventListener('click', e => {
+      if (e.target.closest('[data-review-open]')) {
+        rform.hidden = false; thanks.hidden = true;
+        rform.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setTimeout(() => $('input[name=rating]', rform).focus({ preventScroll: true }), 400);
+      }
+      const more = e.target.closest('[data-review-more]');
+      if (more) { document.querySelectorAll('[data-more]').forEach(c => { c.hidden = false; }); more.remove(); }
+    });
+    rform.addEventListener('submit', async e => {
+      e.preventDefault();
+      rErr.hidden = true;
+      const d = Object.fromEntries(new FormData(rform));
+      let ok = true;
+      if (!d.rating) { pick.classList.add('bad'); label.textContent = 'Please choose 1 to 5 stars'; ok = false; }
+      fieldErr('name', String(d.name || '').trim().length < 2 ? 'Please enter your name.' : '');
+      fieldErr('text', String(d.text || '').trim().length < 10 ? 'Please write at least a few words (10 letters).' : '');
+      if (!ok || rform.querySelector('.field.bad')) return;
+      const btn = $('button[type=submit]', rform);
+      btn.disabled = true; btn.textContent = 'Sending…';
+      try {
+        const r = await post('/api/reviews', { ...d, productId: rform.dataset.product });
+        rform.reset(); rform.hidden = true; label.textContent = 'Tap a star to rate';
+        thanks.innerHTML = `<b>Thank you, ${esc(d.name.trim().split(/\s+/)[0])}!</b><p>Your review has been received${r.verified ? ' and matched your order — it will carry a <strong>✓ Verified buyer</strong> badge' : ''}. It will appear here once we have read it.</p>`;
+        thanks.hidden = false;
+        thanks.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch (err) {
+        if (err.field === 'rating') { pick.classList.add('bad'); label.textContent = err.message; }
+        else if (err.field) fieldErr(err.field, err.message);
+        else { rErr.textContent = err.message; rErr.hidden = false; }
+      } finally { btn.disabled = false; btn.textContent = 'Submit review'; }
+    });
+  }
+
   badge();
 })();

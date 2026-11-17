@@ -174,7 +174,7 @@ function whyBlock(s, f) {
 </section>`;
 }
 
-function home(db, products) {
+function home(db, products, reviews) {
   const s = db.settings;
   const f = products.find(p => p.featured) || products[0];
   const tabs = f ? [
@@ -242,6 +242,8 @@ ${s.storyText ? `<section class="story" id="story">
 ${videoBlock(s, f && f.images[0])}
 
 ${whyBlock(s, f)}
+
+${reviewsHome(reviews, f)}
 
 ${journey.length && f ? `<section class="journey" id="journey" data-journey style="--steps:${journey.length}">
   <div class="journey-stage">
@@ -344,7 +346,92 @@ function priceBlock(p, big) {
 }
 const TRUST_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>';
 
-function product(db, p, related, methods = [], offers = {}) {
+/* ---------------- reviews ---------------- */
+// gold stars filled to the exact rating (4.6 → 92%)
+const starBar = (r, cls = '') => `<span class="rs-stars ${cls}" style="--pct:${Math.max(0, Math.min(100, r / 5 * 100))}%" role="img" aria-label="${r} out of 5 stars"><i>★★★★★</i></span>`;
+const initials = n => String(n || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+const reviewDate = d => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+
+function reviewCard(r, { product = '' } = {}) {
+  return `<article class="rv-card">
+    <header>
+      <span class="rv-avatar" aria-hidden="true">${esc(initials(r.name))}</span>
+      <div><b>${esc(r.name)}</b><small>${r.city ? esc(r.city) + ' · ' : ''}${reviewDate(r.createdAt)}</small></div>
+      ${r.verified ? '<span class="rv-verified" title="Bought from Rupali Shine">✓ Verified buyer</span>' : ''}
+    </header>
+    ${starBar(r.rating)}
+    ${r.title ? `<h4>${esc(r.title)}</h4>` : ''}
+    <p>${esc(r.text)}</p>
+    ${r.photo ? `<img class="rv-img" src="${esc(r.photo)}" alt="Photo from ${esc(r.name)}" loading="lazy">` : ''}
+    ${product ? `<span class="rv-product">${esc(product)}</span>` : ''}
+    ${r.reply ? `<div class="rv-reply"><b>Reply from Rupali Shine</b>${esc(r.reply)}</div>` : ''}
+  </article>`;
+}
+
+function reviewsSection(p, rv) {
+  const { list, summary: s } = rv;
+  const SHOW = 6;
+  return `<section class="reviews-sec" id="reviews">
+  <div class="wrap">
+    <div class="sec-head"><span class="kicker">Customer reviews</span><h2>What our customers say</h2></div>
+    <div class="rv-layout">
+      <aside class="rv-summary">
+        ${s.count ? `<div class="rv-avg"><b>${s.avg.toFixed(1)}</b><span>out of 5</span></div>
+        ${starBar(s.avg, 'lg')}
+        <p class="rv-based">Based on ${plural(s.count, 'review')}</p>
+        <ul class="rv-bars">${s.bars.map((n, i) => `<li><span>${5 - i} ★</span><i><em style="width:${s.count ? Math.round(n / s.count * 100) : 0}%"></em></i><small>${n}</small></li>`).join('')}</ul>`
+        : `<div class="rv-empty"><span class="rv-quote" aria-hidden="true">“</span><p><b>No reviews yet.</b> Tried ${esc(p.name)}? Your words help the next family decide.</p></div>`}
+        <button type="button" class="btn btn-buy btn-block" data-review-open>Write a review</button>
+      </aside>
+      <div class="rv-main">
+        <form class="rv-form" id="reviewForm" data-product="${esc(p.id)}" novalidate${s.count ? ' hidden' : ''}>
+          <h3>Share your experience</h3>
+          <div class="rv-pick" role="radiogroup" aria-label="Your rating">${[5, 4, 3, 2, 1].map(n => `<input type="radio" id="rate${n}" name="rating" value="${n}"><label for="rate${n}" title="${plural(n, 'star')}">★</label>`).join('')}<span class="rv-pick-label" data-rate-label>Tap a star to rate</span></div>
+          <div class="fields">
+            <label class="field" data-field="name"><span>Your name *</span><input name="name" maxlength="60" autocomplete="name" required><small class="err" hidden></small></label>
+            <label class="field"><span>City</span><input name="city" maxlength="60" autocomplete="address-level2"></label>
+            <label class="field full"><span>Heading</span><input name="title" maxlength="100" placeholder="E.g. Less hair fall in a month"></label>
+            <label class="field full" data-field="text"><span>Your review *</span><textarea name="text" rows="4" maxlength="1500" required placeholder="How did your hair feel? How long have you used it?"></textarea><small class="err" hidden></small></label>
+            <label class="field"><span>Order number (optional)</span><input name="orderNumber" maxlength="20" placeholder="E.g. RS-1001"></label>
+            <label class="field"><span>Mobile used for the order</span><div class="with-prefix"><b>+91</b><input name="phone" inputmode="numeric" maxlength="10" autocomplete="tel-national"></div></label>
+            <p class="rv-hint full">Add your order number and mobile to get a <b>✓ Verified buyer</b> badge. Your number is never shown.</p>
+            <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+          </div>
+          <p class="form-error" data-review-error hidden></p>
+          <button class="btn btn-buy" type="submit">Submit review</button>
+        </form>
+        <div class="rv-thanks" data-review-thanks hidden></div>
+        ${list.length ? `<div class="rv-cards">${list.map((r, i) => i < SHOW ? reviewCard(r) : reviewCard(r).replace('<article class="rv-card">', '<article class="rv-card" hidden data-more>')).join('')}</div>
+        ${list.length > SHOW ? `<button type="button" class="btn btn-outline rv-more" data-review-more>Show all ${list.length} reviews</button>` : ''}` : ''}
+      </div>
+    </div>
+  </div>
+</section>${s.count ? `<script type="application/ld+json">${JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'Product', name: p.name, image: p.images[0] || undefined,
+    aggregateRating: { '@type': 'AggregateRating', ratingValue: s.avg, reviewCount: s.count },
+    review: list.slice(0, 10).map(r => ({ '@type': 'Review', author: { '@type': 'Person', name: r.name }, datePublished: String(r.createdAt).slice(0, 10), reviewBody: r.text, reviewRating: { '@type': 'Rating', ratingValue: r.rating } }))
+  }).replace(/</g, '\\u003c')}</script>` : ''}`;
+}
+
+// home page strip: featured reviews (or the newest) as cards
+function reviewsHome(rv, f) {
+  if (!rv || !rv.list.length) return '';
+  const s = rv.summary;
+  return `<section class="reviews-home" id="reviews">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="kicker">Loved by our customers</span>
+      <h2>Real words from real homes</h2>
+      <p class="rv-headline">${starBar(s.avg, 'lg')}<b>${s.avg.toFixed(1)}</b> out of 5 · ${plural(s.count, 'review')}</p>
+    </div>
+    <div class="rv-row reveal">${rv.list.map(r => reviewCard(r)).join('')}</div>
+    ${f ? `<p class="rv-all"><a class="link" href="/product/${esc(f.slug)}#reviews">Read all reviews ${ICON.arrow}</a></p>` : ''}
+  </div>
+</section>`;
+}
+
+function product(db, p, related, methods = [], offers = {}, rv = { list: [], summary: { count: 0, avg: 0, bars: [0, 0, 0, 0, 0] } }) {
   const s = db.settings;
   const steps = p.howToUse.map(step);
   const tiers = offers.tiers || [], coupons = offers.coupons || [];
@@ -365,6 +452,7 @@ function product(db, p, related, methods = [], offers = {}) {
   <div class="pdp-info">
     <p class="crumbs"><a href="/">Home</a> / <a href="/shop">Shop</a>${p.category ? ` / ${esc(p.category)}` : ''}</p>
     <h1>${esc(p.name)}</h1>
+    <a class="rating-line" href="#reviews">${rv.summary.count ? `${starBar(rv.summary.avg)}<b>${rv.summary.avg.toFixed(1)}</b><span>${plural(rv.summary.count, 'review')}</span>` : '<span>Be the first to review</span>'}</a>
     ${p.shortDesc ? `<p class="lead">${esc(p.shortDesc)}</p>` : ''}
     ${priceBlock(p, true)}
     <p class="meta">${p.size ? `Net quantity: <b>${esc(p.size)}</b> · ` : ''}Inclusive of all taxes</p>
@@ -401,6 +489,7 @@ function product(db, p, related, methods = [], offers = {}) {
   ${steps.length ? `<div class="block"><h3>How to use</h3><ol class="how">${steps.map(st => `<li>${st.title ? `<b>${esc(st.title)}.</b> ` : ''}${esc(st.text)}</li>`).join('')}</ol></div>` : ''}
   ${p.caution ? `<div class="block caution"><h3>Caution</h3>${paras(p.caution)}</div>` : ''}
 </section>
+${reviewsSection(p, rv)}
 ${related.length ? `<section class="wrap products-sec"><h2 class="section-title">You may also like</h2><div class="grid">${related.map(card).join('')}</div></section>` : ''}
 ${inStock ? `<div class="sticky-buy" data-sticky-buy hidden>
   <div><b>${esc(p.name)}</b><span>${money(p.price)}${off(p) ? ` <s>${money(p.mrp)}</s> <em>${off(p)}% OFF</em>` : ''}</span></div>

@@ -12,7 +12,7 @@ const DB_NAME = process.env.MONGODB_DB || 'rupalishine';
 
 // lists are stored one document per item, so two customers ordering at the same moment
 // never overwrite each other. `pos: true` lists keep the order they were created in.
-const LISTS = { products: { pos: true }, pages: { pos: true }, coupons: { pos: true }, orders: {}, messages: {} };
+const LISTS = { products: { pos: true }, pages: { pos: true }, coupons: { pos: true }, orders: {}, messages: {}, reviews: {} };
 const ALL_LISTS = Object.keys(LISTS);
 
 let clientPromise;

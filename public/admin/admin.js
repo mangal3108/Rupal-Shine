@@ -70,7 +70,7 @@
   }
 
   /* ---------- shell ---------- */
-  const NAV = [['dashboard', 'Dashboard'], ['products', 'Products'], ['orders', 'Orders'], ['offers', 'Offers & Coupons'], ['payments', 'Payments'], ['pages', 'Pages'], ['messages', 'Messages'], ['settings', 'Site Settings'], ['account', 'Account']];
+  const NAV = [['dashboard', 'Dashboard'], ['products', 'Products'], ['orders', 'Orders'], ['reviews', 'Reviews'], ['offers', 'Offers & Coupons'], ['payments', 'Payments'], ['pages', 'Pages'], ['messages', 'Messages'], ['settings', 'Site Settings'], ['account', 'Account']];
   function shell() {
     app.innerHTML = `<div class="shell">
       <aside class="side">
@@ -129,7 +129,96 @@
     draw();
   }
 
+  /* ---------- reviews helpers ---------- */
+  const stars = n => `<span class="stars" aria-label="${n} out of 5 stars">${'★'.repeat(n)}<i>${'★'.repeat(5 - n)}</i></span>`;
+  const SOURCE = { website: 'Website', admin: 'Added by you', whatsapp: 'WhatsApp', email: 'Email', instagram: 'Instagram', phone: 'Phone call' };
+  const day = d => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const toDateInput = iso => (iso ? new Date(iso) : new Date()).toISOString().slice(0, 10);
+
+  function reviewForm(r, products) {
+    const photo = r && r.photo ? [r.photo] : [];
+    const opt = (v, label, cur) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(label)}</option>`;
+    openModal(r ? 'Edit review' : 'Add a review', `<form id="reviewForm">
+      ${r ? '' : '<p class="note">Only add reviews that real customers gave you — for example on WhatsApp, Instagram, email or a phone call. Never write reviews yourself: fake reviews are against consumer law in India and break buyers’ trust.</p>'}
+      <div class="fields">
+        <label class="field"><span>Product</span><select name="productId">${products.map(p => opt(p.id, p.name, r ? r.productId : products[0] && products[0].id)).join('')}</select></label>
+        <div class="field"><span>Rating</span><div class="star-pick">${[5, 4, 3, 2, 1].map(n => `<input type="radio" id="st${n}" name="rating" value="${n}"${(r ? r.rating : 5) === n ? ' checked' : ''}><label for="st${n}" title="${n} star${n > 1 ? 's' : ''}">★</label>`).join('')}</div></div>
+        ${field('Customer name', 'name', r && r.name, { attrs: 'required maxlength="60"' })}
+        ${field('City (optional)', 'city', r && r.city, { attrs: 'maxlength="60"' })}
+        ${field('Review heading (optional)', 'title', r && r.title, { full: true, attrs: 'maxlength="100"', hint: 'E.g. “My hair fall reduced”' })}
+        ${area('Review', 'text', r && r.text, { rows: 5 })}
+        <div class="field full"><span>Customer photo (optional)</span><div class="images" id="reviewPhoto"></div><small>A photo the customer sent you, with their permission.</small></div>
+        ${field('Date', 'createdAt', toDateInput(r && r.createdAt), { type: 'date' })}
+        ${r ? `<label class="field"><span>Came from</span><input type="text" value="${esc(SOURCE[r.source] || r.source)}" disabled></label>` : `<label class="field"><span>Came from</span><select name="source">${['whatsapp', 'instagram', 'email', 'phone', 'admin'].map(k => opt(k, SOURCE[k], 'whatsapp')).join('')}</select></label>`}
+        ${area('Your reply (optional)', 'reply', r && r.reply, { rows: 3, hint: 'Shown under the review as “Reply from Rupali Shine”. A warm thank-you builds trust.' })}
+        <label class="field"><span>Show on website?</span><select name="status">${[['approved', 'Yes — show it'], ['pending', 'Not yet — keep for checking'], ['hidden', 'No — hide it']].map(([v, l]) => opt(v, l, r ? r.status : 'approved')).join('')}</select></label>
+        <div class="field"><span>Badges</span>${check('Verified buyer (they really bought from you)', 'verified', r && r.verified)}${check('Feature on the home page', 'featured', r && r.featured)}</div>
+      </div>
+      ${r && r.orderNumber ? `<p class="muted">Customer gave order <b>${esc(r.orderNumber)}</b>${r.phone ? ` and mobile <b>${esc(r.phone)}</b>` : ''}. ${r.verified ? 'These matched a real order.' : 'These did not match an order automatically — check before marking as verified.'}</p>` : ''}
+      <div class="form-actions"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn">${r ? 'Save changes' : 'Add review'}</button></div>
+    </form>`);
+    imagePicker(modal.querySelector('#reviewPhoto'), photo, { multiple: false });
+    modal.querySelector('#reviewForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const d = formData(e.target);
+      d.photo = photo[0] || '';
+      try {
+        await api(r ? 'PUT' : 'POST', '/reviews' + (r ? '/' + r.id : ''), d);
+        closeModal(); toast(r ? 'Review saved' : 'Review added'); go('reviews');
+      } catch (ex) { fail(ex); }
+    });
+  }
+
   const VIEWS = {
+    /* ---------- reviews ---------- */
+    async reviews(main) {
+      const { reviews, products } = await api('GET', '/reviews');
+      let filter = reviews.some(r => r.status === 'pending') ? 'pending' : 'all';
+      const productName = id => (products.find(p => p.id === id) || {}).name || '';
+      function draw() {
+        const count = k => reviews.filter(r => r.status === k).length;
+        const live = reviews.filter(r => r.status === 'approved');
+        const avg = live.length ? (live.reduce((s, r) => s + r.rating, 0) / live.length).toFixed(1) : '–';
+        const list = filter === 'all' ? reviews : reviews.filter(r => r.status === filter);
+        const TABS = [['pending', 'To check'], ['approved', 'Showing on website'], ['hidden', 'Hidden'], ['all', 'All']];
+        main.innerHTML = `<div class="top"><h1>Reviews</h1><button class="btn" data-new>+ Add review</button></div>
+          <div class="stats">
+            <div class="stat"><b>${avg}</b><span>Average rating</span></div>
+            <div class="stat"><b>${live.length}</b><span>Showing on website</span></div>
+            <div class="stat"><b>${count('pending')}</b><span>To check</span></div>
+            <div class="stat"><b>${live.filter(r => r.featured).length}</b><span>On home page</span></div>
+          </div>
+          <div class="seg">${TABS.map(([k, l]) => `<button data-filter="${k}"${k === filter ? ' class="on"' : ''}>${l}${k !== 'all' ? ` <em>${count(k)}</em>` : ''}</button>`).join('')}</div>
+          <div class="rv-list">${list.length ? list.map(r => `<article class="rv ${esc(r.status)}">
+            <div class="rv-head">${stars(r.rating)}<span class="tag ${r.status === 'approved' ? '' : r.status === 'pending' ? 'pending' : 'off'}">${r.status === 'approved' ? 'Showing' : r.status === 'pending' ? 'To check' : 'Hidden'}</span>${r.verified ? '<span class="tag">✓ Verified buyer</span>' : ''}${r.featured ? '<span class="tag gold">★ Home page</span>' : ''}</div>
+            ${r.title ? `<h4>${esc(r.title)}</h4>` : ''}
+            <p>${esc(r.text)}</p>
+            ${r.photo ? `<img class="rv-photo" src="${esc(r.photo)}" alt="">` : ''}
+            ${r.reply ? `<p class="rv-reply"><b>Your reply:</b> ${esc(r.reply)}</p>` : ''}
+            <p class="muted rv-meta"><b>${esc(r.name)}</b>${r.city ? ', ' + esc(r.city) : ''} · ${esc(productName(r.productId) || r.productName)} · ${day(r.createdAt)} · ${esc(SOURCE[r.source] || r.source)}</p>
+            <div class="actions">
+              ${r.status !== 'approved' ? `<button class="btn sm" data-status="approved" data-id="${esc(r.id)}">Approve &amp; show</button>` : `<button class="btn ghost sm" data-status="hidden" data-id="${esc(r.id)}">Hide</button>`}
+              ${r.status === 'approved' ? `<button class="btn ghost sm" data-feature="${r.featured ? '0' : '1'}" data-id="${esc(r.id)}">${r.featured ? 'Remove from home page' : 'Show on home page'}</button>` : ''}
+              <button class="btn ghost sm" data-edit="${esc(r.id)}">Edit / reply</button>
+              <button class="btn danger sm" data-del="${esc(r.id)}">Delete</button>
+            </div>
+          </article>`).join('') : `<div class="card"><p class="empty">${filter === 'pending' ? 'No reviews waiting. New reviews from customers appear here first, and only show on the website after you approve them.' : 'No reviews here yet. Customers can write one on each product page, or click “Add review” to add one a customer sent you.'}</p></div>`}</div>`;
+      }
+      draw();
+      main.onclick = async e => {
+        const t = e.target.closest('button'); if (!t) return;
+        const r = reviews.find(x => x.id === t.dataset.id || x.id === t.dataset.edit || x.id === t.dataset.del);
+        try {
+          if (t.dataset.filter) { filter = t.dataset.filter; return draw(); }
+          if ('new' in t.dataset) return reviewForm(null, products);
+          if (t.dataset.edit) return reviewForm(r, products);
+          if (t.dataset.status) { Object.assign(r, await api('PUT', '/reviews/' + r.id, { status: t.dataset.status })); toast(t.dataset.status === 'approved' ? 'Now showing on the website' : 'Hidden from the website'); return draw(); }
+          if (t.dataset.feature) { Object.assign(r, await api('PUT', '/reviews/' + r.id, { featured: t.dataset.feature === '1' })); return draw(); }
+          if (t.dataset.del && confirm('Delete this review permanently?')) { await api('DELETE', '/reviews/' + r.id); reviews.splice(reviews.indexOf(r), 1); draw(); }
+        } catch (ex) { fail(ex); }
+      };
+    },
+
     /* ---------- dashboard ---------- */
     async dashboard(main) {
       const s = await api('GET', '/stats');
@@ -140,6 +229,7 @@
           <div class="stat"><b>${money(s.revenue)}</b><span>Order value</span></div>
           <div class="stat"><b>${s.products}</b><span>Products</span></div>
           <div class="stat"><b>${s.messages}</b><span>Messages</span></div>
+          <div class="stat"><b>${s.pendingReviews || 0}</b><span>Reviews to check</span></div>
         </div>
         ${s.lowStock.length ? `<div class="card"><h3>Low stock</h3>${s.lowStock.map(p => `<p class="muted" style="margin:0">${esc(p.name)} — <b>${p.stock}</b> left</p>`).join('')}</div>` : ''}
         <div class="card"><h3>Recent orders</h3>${s.recent.length ? `<div class="table-wrap"><table>

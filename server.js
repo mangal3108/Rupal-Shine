@@ -152,6 +152,7 @@ for (const p of db.products) {
 }
 db.spinOrdered = true;
 db.coupons = db.coupons || [];
+db.reviews = db.reviews || [];
 }
 const STORY_TEXT = 'Long before there was a label or a bottle, there was my mother, making this oil with her own hands. Jatamansi, brahmi, amla, bhringraj, hibiscus — every herb in it was her choice.\n\nShe is no longer with us. But her recipe is, and so is the care she put into it. I started Rupali Shine so that her oil would not end with her — so that it could reach more homes than she ever could.\n\nHer picture is on every bottle, because every bottle is still hers.';
 // same story with key phrases in **bold** for the home page
@@ -248,7 +249,7 @@ app.get('/api/pincode/:pin', async (req, res) => {
   res.set('Cache-Control', r.verified ? 'public, max-age=86400' : 'no-store').json(r);
 });
 // load the data each request needs (orders and messages only where they are used)
-const NEEDS_ORDERS = /^\/(api\/admin|api\/orders|api\/pay|order|pay)(\/|$)/, NEEDS_MESSAGES = /^\/(api\/admin|api\/contact)(\/|$)/;
+const NEEDS_ORDERS = /^\/(api\/admin|api\/orders|api\/pay|api\/reviews|order|pay)(\/|$)/, NEEDS_MESSAGES = /^\/(api\/admin|api\/contact)(\/|$)/;
 app.use(storeMiddleware(firstData, () => { prepare(); prepareStory(); }, p =>
   ALL_LISTS.filter(k => k === 'orders' ? NEEDS_ORDERS.test(p) : k === 'messages' ? NEEDS_MESSAGES.test(p) : true)));
 
@@ -290,12 +291,30 @@ const activeProducts = () => db.products.filter(p => p.active).map(p => {
 });
 const send = (res, html, status = 200) => res.status(status).type('html').send(html);
 
-app.get('/', (req, res) => send(res, views.home(db, activeProducts())));
+/* ---------------- reviews ---------------- */
+// Only reviews the store owner has approved are ever shown. Nothing is shown until real customers write in.
+const approvedReviews = productId => db.reviews.filter(r => r.status === 'approved' && (!productId || r.productId === productId))
+  .sort((a, b) => (b.featured - a.featured) || String(b.createdAt).localeCompare(String(a.createdAt)));
+function ratingSummary(list) {
+  const count = list.length;
+  const bars = [5, 4, 3, 2, 1].map(star => list.filter(r => r.rating === star).length);
+  return { count, avg: count ? Math.round(list.reduce((s, r) => s + r.rating, 0) / count * 10) / 10 : 0, bars };
+}
+const reviewsFor = p => { const list = approvedReviews(p.id); return { list, summary: ratingSummary(list) }; };
+const homeReviews = () => {
+  const all = approvedReviews();
+  const featured = all.filter(r => r.featured);
+  return { list: (featured.length ? featured : all).slice(0, 6), summary: ratingSummary(all) };
+};
+const orderKey = v => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const last10 = v => String(v || '').replace(/\D/g, '').slice(-10);
+
+app.get('/', (req, res) => send(res, views.home(db, activeProducts(), homeReviews())));
 app.get('/shop', (req, res) => send(res, views.shop(db, activeProducts(), str(req.query.category, 60))));
 app.get('/product/:slug', (req, res) => {
   const p = activeProducts().find(x => x.slug === req.params.slug);
   if (!p) return send(res, views.notFound(db), 404);
-  send(res, views.product(db, p, activeProducts().filter(x => x.id !== p.id).slice(0, 4), paymentMethods(), { coupons: visibleCoupons(), tiers: bulkTiers() }));
+  send(res, views.product(db, p, activeProducts().filter(x => x.id !== p.id).slice(0, 4), paymentMethods(), { coupons: visibleCoupons(), tiers: bulkTiers() }, reviewsFor(p)));
 });
 app.get('/cart', (req, res) => send(res, views.cart(db)));
 app.get('/checkout', (req, res) => send(res, views.checkout(db, paymentMethods())));
@@ -622,6 +641,35 @@ app.post('/api/contact', (req, res) => {
   res.json({ ok: true });
 });
 
+// a customer writes a review; it waits for the owner's approval before it is shown
+let reviewCount = { t: 0, n: 0 };
+app.post('/api/reviews', (req, res) => {
+  const b = req.body || {};
+  if (str(b.website)) return res.json({ ok: true }); // hidden field only bots fill in
+  const p = activeProducts().find(x => x.id === b.productId);
+  if (!p) return res.status(400).json({ error: 'Please choose a product.' });
+  const rating = Math.round(Number(b.rating));
+  const r = {
+    id: crypto.randomUUID(), createdAt: new Date().toISOString(), productId: p.id, productName: p.name,
+    name: str(b.name, 60), city: str(b.city, 60), rating, title: str(b.title, 100), text: str(b.text, 1500),
+    photo: '', reply: '', status: 'pending', featured: false, verified: false, source: 'website',
+    orderNumber: str(b.orderNumber, 20), phone: last10(b.phone)
+  };
+  if (!(rating >= 1 && rating <= 5)) return res.status(400).json({ error: 'Please choose a star rating.', field: 'rating' });
+  if (r.name.length < 2) return res.status(400).json({ error: 'Please enter your name.', field: 'name' });
+  if (r.text.length < 10) return res.status(400).json({ error: 'Please write a few words about your experience (at least 10 letters).', field: 'text' });
+  if (Date.now() - reviewCount.t > 3600e3) reviewCount = { t: Date.now(), n: 0 };
+  if (++reviewCount.n > 40) return res.status(429).json({ error: 'Too many reviews right now. Please try later.' });
+  // "Verified buyer" when the order number and mobile number match a real order for this product
+  if (r.orderNumber && r.phone.length === 10) {
+    r.verified = db.orders.some(o => orderKey(o.number) === orderKey(r.orderNumber) && last10(o.customer.phone) === r.phone &&
+      !['cancelled', 'pending'].includes(o.status) && o.items.some(i => i.id === p.id));
+  }
+  db.reviews.unshift(r);
+  db.reviews = db.reviews.slice(0, 2000);
+  res.json({ ok: true, verified: r.verified });
+});
+
 /* ---------------- admin API ---------------- */
 app.get('/api/admin/me', (req, res) => res.json({ needsSetup: !db.admin, loggedIn: isAuthed(req), username: db.admin?.username }));
 
@@ -672,6 +720,7 @@ app.get('/api/admin/stats', (req, res) => {
     newOrders: db.orders.filter(o => o.status === 'new').length,
     revenue: live.reduce((s, o) => s + o.total, 0),
     messages: db.messages.length,
+    pendingReviews: db.reviews.filter(r => r.status === 'pending').length,
     lowStock: db.products.filter(p => p.active && p.stock <= 5).map(p => ({ name: p.name, stock: p.stock })),
     recent: db.orders.slice(0, 5)
   });
@@ -829,6 +878,53 @@ app.delete('/api/admin/pages/:id', (req, res) => {
 });
 
 // messages
+// reviews: approve / hide / feature / reply, or add one a customer sent on WhatsApp, email etc.
+const REVIEW_STATUS = ['pending', 'approved', 'hidden'];
+function readReview(b, existing) {
+  const r = existing || { id: crypto.randomUUID(), createdAt: new Date().toISOString(), source: 'admin', orderNumber: '', phone: '' };
+  const p = db.products.find(x => x.id === b.productId) || db.products.find(x => x.id === r.productId);
+  const rating = Math.round(Number(b.rating));
+  if (!p) return 'Please choose a product.';
+  if (!(rating >= 1 && rating <= 5)) return 'Rating must be 1 to 5 stars.';
+  if (str(b.name, 60).length < 2) return 'Please enter the customer’s name.';
+  if (str(b.text, 1500).length < 3) return 'Please enter the review text.';
+  Object.assign(r, {
+    productId: p.id, productName: p.name, rating,
+    name: str(b.name, 60), city: str(b.city, 60), title: str(b.title, 100), text: str(b.text, 1500),
+    reply: str(b.reply, 1000), photo: safeImage(b.photo),
+    status: REVIEW_STATUS.includes(b.status) ? b.status : 'approved',
+    featured: !!b.featured, verified: !!b.verified
+  });
+  if (b.source && !existing) r.source = ['admin', 'whatsapp', 'email', 'instagram', 'phone'].includes(b.source) ? b.source : 'admin';
+  if (b.createdAt && !Number.isNaN(Date.parse(b.createdAt))) r.createdAt = new Date(b.createdAt).toISOString();
+  return r;
+}
+app.get('/api/admin/reviews', (req, res) => res.json({ reviews: db.reviews, products: db.products.map(p => ({ id: p.id, name: p.name })) }));
+app.post('/api/admin/reviews', (req, res) => {
+  const r = readReview(req.body || {});
+  if (typeof r === 'string') return res.status(400).json({ error: r });
+  db.reviews.unshift(r);
+  res.json(r);
+});
+app.put('/api/admin/reviews/:id', (req, res) => {
+  const existing = db.reviews.find(x => x.id === req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Review not found.' });
+  // quick actions from the list send only { status } or { featured }
+  const b = req.body || {};
+  if (Object.keys(b).every(k => k === 'status' || k === 'featured')) {
+    if (REVIEW_STATUS.includes(b.status)) existing.status = b.status;
+    if ('featured' in b) existing.featured = !!b.featured;
+    return res.json(existing);
+  }
+  const r = readReview(b, existing);
+  if (typeof r === 'string') return res.status(400).json({ error: r });
+  res.json(r);
+});
+app.delete('/api/admin/reviews/:id', (req, res) => {
+  db.reviews = db.reviews.filter(x => x.id !== req.params.id);
+  res.json({ ok: true });
+});
+
 app.get('/api/admin/messages', (req, res) => res.json(db.messages));
 app.delete('/api/admin/messages/:id', (req, res) => {
   db.messages = db.messages.filter(x => x.id !== req.params.id);
