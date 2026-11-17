@@ -298,7 +298,7 @@
         <div class="card"><h3>Home page — our story</h3><div class="fields">
           ${field('Small heading', 'storyKicker', s.storyKicker)}
           ${field('Heading', 'storyTitle', s.storyTitle)}
-          ${area('Story', 'storyText', s.storyText, { rows: 9, hint: 'Leave an empty line between paragraphs. Leave the story empty to hide this section.' })}
+          ${area('Story', 'storyText', s.storyText, { rows: 9, hint: 'Leave an empty line between paragraphs. Put **two stars** around words to make them bold. Leave the story empty to hide this section.' })}
           ${field('Signature', 'storySign', s.storySign)}
           ${field('Line under the photo', 'storyCaption', s.storyCaption)}
           <div class="field full"><span>Photo</span><div class="images" id="storyPick"></div></div>
@@ -308,6 +308,11 @@
           ${field('Heading', 'videoTitle', s.videoTitle, { hint: 'Leave empty to show “See how it is made”.' })}
           ${field('Video link', 'videoUrl', s.videoUrl, { hint: 'Paste a YouTube link (or a direct .mp4 link). Leave empty to hide the video section.' })}
           ${field('Text under the video', 'videoCaption', s.videoCaption)}
+        </div></div>
+        <div class="card"><h3>Home page — why choose us</h3><div class="fields">
+          ${field('Small heading', 'whyKicker', s.whyKicker)}
+          ${field('Heading', 'whyTitle', s.whyTitle)}
+          ${area('Points — one per line', 'whyLines', s.whyLines, { rows: 6, hint: 'Write each point as: Title – explanation. Up to 8 points. Leave empty to hide this section.' })}
         </div></div>
         <div class="card"><h3>Home page — highlights &amp; journey</h3><div class="fields">
           ${area('Highlight numbers — one per line', 'statsLines', s.statsLines, { rows: 3, hint: 'Format: Number: label — e.g. 9: Powerful herbs. Numbers count up when the visitor scrolls to them. Leave empty to hide.' })}

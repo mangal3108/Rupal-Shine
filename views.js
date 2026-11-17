@@ -3,6 +3,8 @@ const { STATES } = require('./pincode');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = n => '₹' + Number(n || 0).toLocaleString('en-IN');
 const paras = t => String(t || '').split(/\n\s*\n/).map(p => `<p>${esc(p.trim()).replace(/\n/g, '<br>')}</p>`).join('');
+// paragraphs where **words** become bold (the text is escaped first, so this stays safe)
+const rich = t => paras(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
 const off = p => p.mrp > p.price ? Math.round((1 - p.price / p.mrp) * 100) : 0;
 
 // ingredient -> small round photo (leaf icon when no photo is set)
@@ -18,6 +20,7 @@ const ICON = {
   cart: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h13l-1.5 9h-10z"/><path d="M6 7 5.3 4H3"/><circle cx="9" cy="20" r="1.2"/><circle cx="16.5" cy="20" r="1.2"/></svg>',
   arrow: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
   down: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
+  check: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   leaf: '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M20 4C10 4 5 9 5 16c0 1 0 2 1 3l-2 2 1 1 2-2c1 0 2 1 3 1 7 0 10-7 10-17z"/></svg>',
   crown: '<svg viewBox="0 0 48 30" width="34" height="22" fill="currentColor"><path d="M4 26 1 7l11 8L24 1l12 14 11-8-3 19z"/></svg>',
   steps: [
@@ -134,13 +137,39 @@ function videoBlock(s, poster) {
   else if (/\.(mp4|webm)(\?|$)/i.test(url)) media = `<video src="${esc(url)}" controls playsinline preload="metadata"${poster ? ` poster="${esc(poster)}"` : ''}></video>`;
   if (!media) return '';
   return `<section class="video-sec" id="video">
-  <div class="wrap video-row">
-    <div class="video-copy reveal">
+  <div class="wrap">
+    <div class="sec-head reveal">
       <span class="kicker">${esc(s.videoKicker || 'Watch')}</span>
       <h2>${esc(s.videoTitle || 'See how it is made')}</h2>
+    </div>
+    <div class="video-card reveal">
+      <span class="v-badge">${ICON.leaf}Handmade with care</span>
+      <div class="video-frame">${media}</div>
       ${s.videoCaption ? `<p>${esc(s.videoCaption)}</p>` : ''}
     </div>
-    <div class="video-frame reveal">${media}</div>
+  </div>
+</section>`;
+}
+
+// "Why choose" checklist: one point per line, written as "Title – explanation"
+function whyBlock(s, f) {
+  const items = String(s.whyLines || '').split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+    const m = l.match(/^(.+?)\s+[–—-]\s+(.+)$/) || l.match(/^(.+?):\s*(.+)$/);
+    return m ? { title: m[1], text: m[2] } : { title: l, text: '' };
+  });
+  if (!items.length) return '';
+  const img = f && (f.images[1] || f.images[0]);
+  return `<section class="why" id="why">
+  <div class="wrap">
+    <div class="why-card reveal">
+      ${img ? `<div class="why-img"><img src="${esc(img)}" alt="${esc(f.name)}" loading="lazy"></div>` : ''}
+      <div class="why-copy">
+        ${s.whyKicker ? `<span class="kicker">${esc(s.whyKicker)}</span>` : ''}
+        <h2>${esc(s.whyTitle || 'Why choose us?')}</h2>
+        <ul class="why-list">${items.map(i => `<li>${ICON.check}<span><b>${esc(i.title)}</b>${i.text ? ` – ${esc(i.text)}` : ''}</span></li>`).join('')}</ul>
+        ${f ? `<a class="btn btn-buy" href="/product/${esc(f.slug)}">Buy now ${ICON.arrow}</a>` : ''}
+      </div>
+    </div>
   </div>
 </section>`;
 }
@@ -193,22 +222,26 @@ ${stats.length ? `<section class="stats"><div class="wrap stats-row">
 </section>
 
 ${s.storyText ? `<section class="story" id="story">
-  <div class="wrap story-row">
-    <figure class="story-photo reveal">
-      ${s.storyImage ? `<div class="story-frame"><img src="${esc(s.storyImage)}" alt="${esc(s.storyCaption || s.storyTitle)}" loading="lazy"></div>` : ''}
-      ${s.storyCaption ? `<figcaption><i></i>${esc(s.storyCaption)}<i></i></figcaption>` : ''}
-    </figure>
-    <div class="story-copy reveal">
-      ${s.storyKicker ? `<span class="kicker">${esc(s.storyKicker)}</span>` : ''}
-      <h2>${esc(s.storyTitle)}</h2>
-      ${paras(s.storyText)}
-      ${s.storySign ? `<p class="story-sign">— ${esc(s.storySign)}</p>` : ''}
+  <div class="wrap">
+    <div class="story-card reveal">
+      <figure class="story-photo">
+        ${s.storyImage ? `<div class="story-frame"><img src="${esc(s.storyImage)}" alt="${esc(s.storyCaption || s.storyTitle)}" loading="lazy"></div>` : ''}
+        ${s.storyCaption ? `<figcaption>${ICON.leaf}${esc(s.storyCaption)}</figcaption>` : ''}
+      </figure>
+      <div class="story-copy">
+        ${s.storyKicker ? `<span class="kicker">${esc(s.storyKicker)}</span>` : ''}
+        <h2>${esc(s.storyTitle)}</h2>
+        ${rich(s.storyText)}
+        ${s.storySign ? `<p class="story-sign">— ${esc(s.storySign)}</p>` : ''}
+      </div>
     </div>
   </div>
 </section>
 <ul class="facts" aria-label="Good to know">${FACTS.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
 
 ${videoBlock(s, f && f.images[0])}
+
+${whyBlock(s, f)}
 
 ${journey.length && f ? `<section class="journey" id="journey" data-journey style="--steps:${journey.length}">
   <div class="journey-stage">

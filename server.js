@@ -154,10 +154,25 @@ db.spinOrdered = true;
 db.coupons = db.coupons || [];
 }
 const STORY_TEXT = 'Long before there was a label or a bottle, there was my mother, making this oil with her own hands. Jatamansi, brahmi, amla, bhringraj, hibiscus — every herb in it was her choice.\n\nShe is no longer with us. But her recipe is, and so is the care she put into it. I started Rupali Shine so that her oil would not end with her — so that it could reach more homes than she ever could.\n\nHer picture is on every bottle, because every bottle is still hers.';
+// same story with key phrases in **bold** for the home page
+const STORY_TEXT_RICH = STORY_TEXT
+  .replace('making this oil with her own hands', '**making this oil with her own hands**')
+  .replace('so that her oil would not end with her', '**so that her oil would not end with her**')
+  .replace('every bottle is still hers', '**every bottle is still hers**');
+const WHY_LINES = [
+  'Nine herbs in one oil – jatamansi, brahmi, bhringraj, amla, hibiscus, methi, curry leaves and aloe vera',
+  'Coconut oil base – the herbs are infused in cold-pressed coconut oil',
+  'Her recipe – made the way she made it at home, by hand, in small batches',
+  'Simple ritual – massage, leave on for an hour or overnight, then wash',
+  'Easy to order – free delivery across India and cash on delivery'
+].join('\n');
 const STORY_DEFAULTS = {
-  storyKicker: 'Our Story',
+  storyKicker: 'The heart of Rupali Shine',
   storyTitle: 'This oil was my mother’s first',
-  storyText: STORY_TEXT,
+  storyText: STORY_TEXT_RICH,
+  whyKicker: 'Why Rupali Shine',
+  whyTitle: 'Why choose Rupali Shine?',
+  whyLines: WHY_LINES,
   storySign: 'Her son, Founder of Rupali Shine',
   storyCaption: 'In loving memory',
   storyImage: '/uploads/rupali-mother-original.webp'
@@ -166,6 +181,9 @@ function prepareStory() {
 for (const k in STORY_DEFAULTS) if (db.settings[k] === undefined) db.settings[k] = STORY_DEFAULTS[k];
 // the first starter photo was a cropped copy; switch stores still using it to the original photo
 if (db.settings.storyImage === '/uploads/rupali-mother.webp') db.settings.storyImage = '/uploads/rupali-mother-original.webp';
+// stores still showing the untouched starter story get the version with bold key phrases
+if (db.settings.storyText === STORY_TEXT) db.settings.storyText = STORY_TEXT_RICH;
+if (db.settings.storyKicker === 'Our Story') db.settings.storyKicker = STORY_DEFAULTS.storyKicker;
 // first run after the story was added: tell it on the About page too (only if that page is still the starter text)
 const aboutPage = db.pages.find(p => p.slug === 'about');
 if (!db.storyAdded && aboutPage && aboutPage.content.startsWith('Rupali Shine is a handmade herbal hair care brand')) {
@@ -902,7 +920,8 @@ app.put('/api/admin/settings', (req, res) => {
   for (const k of ['siteName', 'announcement', 'heroKicker', 'heroTitle', 'heroCta', 'introKicker', 'introTitle', 'herbsTitle', 'email', 'phone', 'whatsapp', 'address', 'footerNote'])
     if (k in b) s[k] = str(b[k], 200);
   for (const k of ['heroSubtitle', 'introText']) if (k in b) s[k] = str(b[k], 600);
-  for (const k of ['journeyKicker', 'journeyTitle', 'storyKicker', 'storyTitle', 'storySign', 'storyCaption', 'videoKicker', 'videoTitle']) if (k in b) s[k] = str(b[k], 120);
+  for (const k of ['journeyKicker', 'journeyTitle', 'storyKicker', 'storyTitle', 'storySign', 'storyCaption', 'videoKicker', 'videoTitle', 'whyKicker', 'whyTitle']) if (k in b) s[k] = str(b[k], 120);
+  if ('whyLines' in b) s.whyLines = list(b.whyLines, 8).join('\n');
   if ('videoCaption' in b) s.videoCaption = str(b.videoCaption, 300);
   if ('videoUrl' in b) s.videoUrl = safeUrl(b.videoUrl);
   if ('storyText' in b) s.storyText = str(b.storyText, 3000);
