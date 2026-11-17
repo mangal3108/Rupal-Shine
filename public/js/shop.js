@@ -85,9 +85,26 @@
       if (best) best.checked = true;
     });
   }
-  const sticky = $('[data-sticky-buy]'), buyRow = $('#buyRow');
-  if (sticky && buyRow && 'IntersectionObserver' in window) {
-    new IntersectionObserver(es => { sticky.hidden = es[0].isIntersecting || es[0].boundingClientRect.top > 0; }).observe(buyRow);
+  // sticky buy bar: shown once the watched element (product buy buttons / home hero) has scrolled up out of view,
+  // and tucked away again while the footer is on screen so it never covers the footer links
+  const sticky = $('[data-sticky-buy]');
+  const watched = sticky && sticky.dataset.watch && $(sticky.dataset.watch);
+  if (sticky && watched && 'IntersectionObserver' in window) {
+    let past = false, footer = false;
+    const update = () => {
+      const show = past && !footer;
+      sticky.hidden = false;
+      sticky.classList.toggle('show', show);
+      document.body.classList.toggle('has-sticky', show);
+    };
+    new IntersectionObserver(es => { past = !es[0].isIntersecting && es[0].boundingClientRect.top < 0; update(); }).observe(watched);
+    const foot = $('.site-footer');
+    if (foot) new IntersectionObserver(es => { footer = es[0].isIntersecting; update(); }).observe(foot);
+    // a little "pop" on the cart button after adding, so the shopper sees it worked
+    sticky.addEventListener('click', e => {
+      const b = e.target.closest('.sb-cart'); if (!b) return;
+      b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
+    });
   }
   const applied = getCoupon();
   document.querySelectorAll('[data-coupon]').forEach(b => { if (b.dataset.coupon === applied) { b.classList.add('on'); b.querySelector('em').textContent = 'Applied ✓'; } });
@@ -330,6 +347,22 @@
       cform.innerHTML = '<p class="lead">Thank you! Your message has been sent. We will get back to you soon.</p>';
     } catch (err) { showError(err.message); }
   });
+
+  /* ---------- video section slideshow (shown until a video link is added) ---------- */
+  const montage = $('[data-montage]');
+  if (montage) {
+    const shots = montage.querySelectorAll('img'), dots = montage.querySelectorAll('.montage-dots li');
+    let i = 0, timer = null;
+    const step = () => {
+      shots[i].classList.remove('on'); dots[i] && dots[i].classList.remove('on');
+      i = (i + 1) % shots.length;
+      shots[i].classList.add('on'); dots[i] && dots[i].classList.add('on');
+    };
+    // only run while the section is on screen
+    const run = on => { clearInterval(timer); timer = on && shots.length > 1 ? setInterval(step, 4200) : null; };
+    if ('IntersectionObserver' in window) new IntersectionObserver(es => run(es[0].isIntersecting)).observe(montage);
+    else run(true);
+  }
 
   /* ---------- reviews (product page) ---------- */
   const rform = $('#reviewForm');

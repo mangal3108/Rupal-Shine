@@ -434,18 +434,46 @@ html:not(.js) .j-orb, html:not(.js) .j-progress { display: none; }
 .trust svg { color: var(--ok); flex: none; }
 .assure { margin-bottom: 4px; }
 
-/* sticky buy bar (appears once the main buy buttons scroll out of view) */
-.sticky-buy { position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; display: flex; align-items: center; justify-content: space-between; gap: 14px; background: rgba(255, 255, 255, .96); backdrop-filter: blur(8px); border-top: 1px solid var(--line); box-shadow: 0 -8px 30px rgba(29, 58, 39, .12); padding: 10px max(16px, calc((100vw - 1160px) / 2 + 24px)); }
-.sticky-buy b { display: block; font: 600 18px var(--serif); color: var(--green); line-height: 1.2; }
-.sticky-buy span { font-weight: 500; color: var(--green); font-size: 14px; }
-.sticky-buy s { color: #a0a79f; font-weight: 300; }
-.sticky-buy em { font-style: normal; color: var(--sale); font-weight: 600; font-size: 12px; }
+/* sticky buy bar (slides up once the main buy buttons scroll out of view) */
+.sticky-buy { position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; display: flex; align-items: center; gap: 12px; background: rgba(255, 255, 255, .97); backdrop-filter: blur(10px); border-top: 1px solid var(--mint-line, #d6e8d2); box-shadow: 0 -10px 34px rgba(31, 81, 48, .14); padding: 10px max(16px, calc((100vw - 1160px) / 2 + 24px)); padding-bottom: max(10px, env(safe-area-inset-bottom)); transform: translateY(110%); transition: transform .35s cubic-bezier(.2, .7, .2, 1); }
+.sticky-buy.show { transform: none; }
+.sb-img { width: 46px; height: 46px; flex: none; object-fit: contain; background: var(--mint, #eef6ec); border-radius: 12px; padding: 3px; border: 1px solid var(--mint-line, #d6e8d2); }
+.sb-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sb-info b { font: 600 18px/1.15 var(--serif); color: var(--deep, #1f5130); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-price { font-weight: 600; color: var(--deep, #1f5130); font-size: 15px; white-space: nowrap; }
+.sb-price s { color: #a0a79f; font-weight: 300; font-size: 13px; }
+.sb-price em { font-style: normal; color: var(--sale); font-weight: 600; font-size: 11.5px; }
+.sb-rating { font-size: 12px; color: var(--gold); font-weight: 600; }
+.sb-rating small { color: var(--muted); font-weight: 400; }
 .sticky-buy .btn { flex: none; }
+.sb-cart { background: var(--mint, #eef6ec); color: var(--deep, #1f5130); box-shadow: inset 0 0 0 1.5px var(--leaf); padding: 12px 18px; }
+.sb-cart:hover { background: var(--leaf); color: #fff; }
+.sb-cart svg { width: 18px; height: 18px; }
+.sb-cart.pop { animation: sb-pop .45s ease; }
+@keyframes sb-pop { 40% { transform: scale(1.12); background: var(--leaf); color: #fff; } }
+.sb-buy { padding: 12px 22px; }
+.sticky-buy.mobile-only { display: none; }
+body.has-sticky { padding-bottom: 72px; }
+body.has-sticky .toast { bottom: 92px; }
+@media (max-width: 860px) {
+  .sticky-buy.mobile-only { display: flex; }
+}
+@media (min-width: 861px) {
+  body.has-sticky:has(.sticky-buy.mobile-only) { padding-bottom: 0; }
+}
 @media (max-width: 760px) {
   .buy-row .btn { flex: 1; }
   .price-block.big .price.big { font-size: 34px; }
-  .sticky-buy b { font-size: 15px; }
+  .sticky-buy { gap: 8px; padding-left: 12px; padding-right: 12px; }
+  .sb-info b { font-size: 15px; }
+  .sb-price { font-size: 14px; }
+  .sb-price s, .sb-rating { display: none; }
+  .sb-cart { padding: 11px 12px; }
+  .sb-cart span { display: none; }
+  .sb-buy { padding: 11px 18px; font-size: 14px; }
 }
+@media (max-width: 360px) { .sb-img { display: none; } }
+@media (prefers-reduced-motion: reduce) { .sticky-buy { transition: none; } .sb-cart.pop { animation: none; } }
 
 /* ================= story, video, why: soft mint cards ================= */
 :root { --mint: #eef6ec; --mint-line: #d6e8d2; --deep: #1f5130; }
@@ -615,3 +643,23 @@ html:not(.js) .j-orb, html:not(.js) .j-progress { display: none; }
   .reviews-sec, .reviews-home { padding: 52px 0 60px; }
   .rv-row { grid-auto-columns: 82%; }
 }
+
+/* video section without a link yet: slow photo slideshow */
+.montage { position: absolute; inset: 0; background: radial-gradient(120% 90% at 30% 20%, #2d5a37, #0f2416); overflow: hidden; }
+.montage img { position: absolute; inset: 6% 18%; width: 64%; height: 88%; object-fit: contain; opacity: 0; transform: scale(1.08); transition: opacity 1.4s ease, transform 7s linear; filter: drop-shadow(0 24px 40px rgba(0, 0, 0, .45)); }
+.montage img.on { opacity: 1; transform: scale(1); }
+.montage-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15, 36, 22, 0) 45%, rgba(15, 36, 22, .85) 100%); pointer-events: none; }
+.montage-text { position: absolute; left: clamp(16px, 4vw, 34px); bottom: clamp(16px, 4vw, 30px); right: 110px; color: #fff; }
+.montage-text span { display: inline-flex; align-items: center; gap: 6px; font: 600 11.5px var(--sans); letter-spacing: .14em; text-transform: uppercase; color: #e3c676; }
+.montage-text span svg { width: 13px; height: 13px; }
+.montage-text b { display: block; font: 600 clamp(22px, 3.4vw, 38px)/1.1 var(--serif); margin-top: 4px; text-shadow: 0 2px 18px rgba(0, 0, 0, .4); }
+.montage-dots { position: absolute; right: clamp(16px, 4vw, 30px); bottom: clamp(20px, 4vw, 34px); display: flex; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.montage-dots li { width: 7px; height: 7px; border-radius: 999px; background: rgba(255, 255, 255, .4); transition: width .4s, background .4s; }
+.montage-dots li.on { width: 22px; background: #e3c676; }
+@media (max-width: 860px) {
+  .video-frame:has(.montage) { aspect-ratio: 4 / 5; }
+  .montage img { inset: 5% 8% auto; width: 84%; height: 64%; }
+  .montage-text { right: 16px; bottom: 38px; }
+  .montage-dots { bottom: 16px; left: clamp(16px, 4vw, 34px); right: auto; }
+}
+@media (prefers-reduced-motion: reduce) { .montage img { transition: opacity .6s; transform: none !important; } }

@@ -127,15 +127,26 @@ function card(p) {
 const FACTS = ['Made in India', 'Cash on delivery available', 'Secure online payments', 'Delivered across India'];
 
 // Video section, set from the admin panel (Site settings → Video). Accepts a YouTube link or a
-// direct .mp4 / .webm link. Hidden when no link is set.
-function videoBlock(s, poster) {
+// direct .mp4 / .webm link. Until a link is added it shows a slow, cinematic slideshow of the product photos.
+function videoBlock(s, f) {
   const url = String(s.videoUrl || '');
-  if (!url) return '';
+  const poster = f && f.images[0];
   const yt = url.match(/(?:youtube\.com\/watch\?(?:.*&)?v=|youtu\.be\/|youtube\.com\/(?:shorts|embed|live)\/)([\w-]{6,})/);
   let media = '';
   if (yt) media = `<iframe src="https://www.youtube-nocookie.com/embed/${esc(yt[1])}" title="${esc(s.videoTitle || 'Video')}" loading="lazy" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
   else if (/\.(mp4|webm)(\?|$)/i.test(url)) media = `<video src="${esc(url)}" controls playsinline preload="metadata"${poster ? ` poster="${esc(poster)}"` : ''}></video>`;
-  if (!media) return '';
+  if (!media) {
+    // no video yet: photo slideshow with a slow zoom, like a film
+    const shots = [...new Set([...(f ? f.images : []), s.storyImage].filter(Boolean))].slice(0, 7);
+    if (!shots.length) return '';
+    media = `<div class="montage" data-montage>
+      ${shots.map((im, i) => `<img src="${esc(im)}" alt=""${i ? ' loading="lazy"' : ' class="on"'}>`).join('')}
+      <div class="montage-shade"></div>
+      <div class="montage-text"><span>${ICON.leaf}${esc(s.siteName || 'Rupali Shine')}</span><b>${esc(s.videoCaption || 'From her kitchen to your home')}</b></div>
+      <ol class="montage-dots" aria-hidden="true">${shots.map((_, i) => `<li${i ? '' : ' class="on"'}></li>`).join('')}</ol>
+    </div>`;
+  }
+  const isFilm = media.startsWith('<iframe') || media.startsWith('<video');
   return `<section class="video-sec" id="video">
   <div class="wrap">
     <div class="sec-head reveal">
@@ -145,7 +156,7 @@ function videoBlock(s, poster) {
     <div class="video-card reveal">
       <span class="v-badge">${ICON.leaf}Handmade with care</span>
       <div class="video-frame">${media}</div>
-      ${s.videoCaption ? `<p>${esc(s.videoCaption)}</p>` : ''}
+      ${s.videoCaption && isFilm ? `<p>${esc(s.videoCaption)}</p>` : ''}
     </div>
   </div>
 </section>`;
@@ -239,7 +250,7 @@ ${s.storyText ? `<section class="story" id="story">
 </section>
 <ul class="facts" aria-label="Good to know">${FACTS.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
 
-${videoBlock(s, f && f.images[0])}
+${videoBlock(s, f)}
 
 ${whyBlock(s, f)}
 
@@ -319,7 +330,8 @@ ${herbs.length ? `<section class="herbs">
     <ul class="herb-list">${herbs.map((h, i) => `<li class="reveal" style="--d:${i}"><span class="herb-circle">${herbImg(h)}</span><em>${esc(h.name)}</em></li>`).join('')}</ul>
   </div>
 </section>` : ''}`;
-  return layout(db, '', body, { path: '/' });
+  const bar = f && f.stock > 0 ? stickyBuy(f, reviews && reviews.summary, { watch: '[data-hero]', mobileOnly: true }) : '';
+  return layout(db, '', body + bar, { path: '/' });
 }
 
 function shop(db, products, category) {
@@ -345,6 +357,22 @@ function priceBlock(p, big) {
   </div>`;
 }
 const TRUST_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>';
+
+/* ---------------- sticky buy bar ---------------- */
+// Pinned to the bottom of the screen once the page's own buy buttons have scrolled away.
+// `watch` is the element that hides the bar while it is on screen; `mobileOnly` hides it on desktops.
+function stickyBuy(p, summary, { qtyFrom = '', watch = '', mobileOnly = false } = {}) {
+  const qty = qtyFrom ? ` data-qty-from="${qtyFrom}"` : '';
+  return `<div class="sticky-buy${mobileOnly ? ' mobile-only' : ''}" data-sticky-buy data-watch="${esc(watch)}" hidden>
+  ${p.images[0] ? `<img class="sb-img" src="${esc(p.images[0])}" alt="" width="46" height="46">` : ''}
+  <div class="sb-info"><b>${esc(p.name)}</b>
+    <span class="sb-price">${money(p.price)}${off(p) ? ` <s>${money(p.mrp)}</s> <em>${off(p)}% OFF</em>` : ''}</span>
+    ${summary && summary.count ? `<span class="sb-rating">★ ${summary.avg.toFixed(1)} <small>(${summary.count})</small></span>` : ''}
+  </div>
+  <button class="btn sb-cart" data-add="${esc(p.id)}" data-name="${esc(p.name)}"${qty} aria-label="Add to cart">${ICON.cart}<span>Add</span></button>
+  <button class="btn btn-buy sb-buy" data-add="${esc(p.id)}"${qty} data-go="/checkout">Buy now</button>
+</div>`;
+}
 
 /* ---------------- reviews ---------------- */
 // gold stars filled to the exact rating (4.6 → 92%)
@@ -491,10 +519,7 @@ function product(db, p, related, methods = [], offers = {}, rv = { list: [], sum
 </section>
 ${reviewsSection(p, rv)}
 ${related.length ? `<section class="wrap products-sec"><h2 class="section-title">You may also like</h2><div class="grid">${related.map(card).join('')}</div></section>` : ''}
-${inStock ? `<div class="sticky-buy" data-sticky-buy hidden>
-  <div><b>${esc(p.name)}</b><span>${money(p.price)}${off(p) ? ` <s>${money(p.mrp)}</s> <em>${off(p)}% OFF</em>` : ''}</span></div>
-  <button class="btn btn-buy" data-add="${esc(p.id)}" data-qty-from="qty" data-go="/checkout">Buy now</button>
-</div>` : ''}`;
+${inStock ? stickyBuy(p, rv.summary, { qtyFrom: 'qty', watch: '#buyRow' }) : ''}`;
   return layout(db, p.name, body, { desc: p.shortDesc });
 }
 
