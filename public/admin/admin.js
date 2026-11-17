@@ -306,7 +306,7 @@
         <div class="card"><h3>Home page — video</h3><div class="fields">
           ${field('Small heading', 'videoKicker', s.videoKicker, { hint: 'Leave empty to show “Watch”.' })}
           ${field('Heading', 'videoTitle', s.videoTitle, { hint: 'Leave empty to show “See how it is made”.' })}
-          ${field('Video link', 'videoUrl', s.videoUrl, { hint: 'Paste a YouTube link (or a direct .mp4 link). Leave empty to hide the video section.' })}
+          ${field('Video link', 'videoUrl', s.videoUrl, { hint: 'Open the video on YouTube, click Share → Copy, and paste the link here (e.g. https://youtu.be/abc123). A direct .mp4 link also works. To change the video, paste a new link and save. Leave empty to hide the video section.' })}
           ${field('Text under the video', 'videoCaption', s.videoCaption)}
         </div></div>
         <div class="card"><h3>Home page — why choose us</h3><div class="fields">

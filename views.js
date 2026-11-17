@@ -131,7 +131,7 @@ const FACTS = ['Made in India', 'Cash on delivery available', 'Secure online pay
 function videoBlock(s, poster) {
   const url = String(s.videoUrl || '');
   if (!url) return '';
-  const yt = url.match(/(?:youtube\.com\/watch\?(?:.*&)?v=|youtu\.be\/|youtube\.com\/(?:shorts|embed)\/)([\w-]{6,})/);
+  const yt = url.match(/(?:youtube\.com\/watch\?(?:.*&)?v=|youtu\.be\/|youtube\.com\/(?:shorts|embed|live)\/)([\w-]{6,})/);
   let media = '';
   if (yt) media = `<iframe src="https://www.youtube-nocookie.com/embed/${esc(yt[1])}" title="${esc(s.videoTitle || 'Video')}" loading="lazy" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
   else if (/\.(mp4|webm)(\?|$)/i.test(url)) media = `<video src="${esc(url)}" controls playsinline preload="metadata"${poster ? ` poster="${esc(poster)}"` : ''}></video>`;

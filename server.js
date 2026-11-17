@@ -205,6 +205,8 @@ function uniqueSlug(base, coll, ignoreId) {
   return slug;
 }
 const safeImage = u => { u = str(u, 300); return /^\/uploads\/[\w.-]+$/.test(u) ? u : ''; };
+// links the home-page video section can play (same patterns as views.videoBlock)
+const VIDEO_LINK = /^https?:\/\/(?:(?:www\.|m\.)?youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/)[\w-]{6,}|youtu\.be\/[\w-]{6,}|\S+\.(?:mp4|webm)(?:\?\S*)?$)/i;
 const safeUrl = u => { u = str(u, 300); return /^https?:\/\//i.test(u) ? u : ''; };
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
@@ -917,6 +919,8 @@ const settingsView = () => ({ ...db.settings, payments: undefined });
 app.get('/api/admin/settings', (req, res) => res.json(settingsView()));
 app.put('/api/admin/settings', (req, res) => {
   const b = req.body || {}, s = db.settings;
+  if (str(b.videoUrl) && !VIDEO_LINK.test(str(b.videoUrl)))
+    return res.status(400).json({ error: 'The video link must be a YouTube link (e.g. https://youtu.be/…) or a direct .mp4 / .webm link.' });
   for (const k of ['siteName', 'announcement', 'heroKicker', 'heroTitle', 'heroCta', 'introKicker', 'introTitle', 'herbsTitle', 'email', 'phone', 'whatsapp', 'address', 'footerNote'])
     if (k in b) s[k] = str(b[k], 200);
   for (const k of ['heroSubtitle', 'introText']) if (k in b) s[k] = str(b[k], 600);
