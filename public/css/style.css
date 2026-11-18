@@ -796,12 +796,14 @@ body.has-sticky .toast { bottom: 92px; }
 }
 
 /* ================= banner slider ================= */
-.banners { padding: 34px 0 10px; background: #fff; }
-.bn-frame { position: relative; border-radius: 26px; overflow: hidden; box-shadow: 0 22px 54px rgba(31, 81, 48, .16); background: #eef6ec; }
+.banners { padding: 40px 0; background: var(--sec-mint); }
+.bn-frame { position: relative; max-width: 1040px; margin: 0 auto; border-radius: 26px; overflow: hidden; box-shadow: 0 22px 54px rgba(31, 81, 48, .16); background: #eef6ec; }
 .bn-track { display: flex; transition: transform .6s cubic-bezier(.2, .7, .2, 1); touch-action: pan-y; }
 .bn-slide { position: relative; flex: 0 0 100%; aspect-ratio: 2 / 1; display: grid; place-items: center; overflow: hidden; }
 .bn-blur { position: absolute; inset: -20px; background-size: cover; background-position: center; filter: blur(24px) saturate(1.1); opacity: .55; }
-.bn-slide picture, .bn-slide img { position: relative; width: 100%; height: 100%; }
+/* the whole banner always shows (no cropping); any spare space shows a soft blur of the same banner */
+.bn-slide picture { position: absolute; inset: 0; display: block; }
+.bn-slide img { position: relative; width: 100%; height: 100%; }
 .bn-slide img { object-fit: contain; display: block; }
 .bn-arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgba(255, 255, 255, .92); color: var(--deep, #1f5130); font-size: 26px; line-height: 1; cursor: pointer; box-shadow: 0 6px 18px rgba(0, 0, 0, .18); display: grid; place-items: center; padding-bottom: 3px; opacity: 0; transition: opacity .25s; }
 .bn-frame:hover .bn-arrow, .bn-arrow:focus-visible { opacity: 1; }
@@ -941,3 +943,31 @@ body.has-sticky .toast { bottom: 92px; }
   .sc-zoom { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .sc-card, .sc-card.flip { transform: none; } .sc-glow { display: none; } }
+
+/* ================= section colours: each home section gets its own background ================= */
+:root { --sec-mint: #eef6ea; --sec-cream: #f7f0e1; --sec-ivory: #fffaf0; --sec-sage: #e7f0e2; --sec-white: #ffffff; }
+/* sections that sit inside a narrow .wrap still paint their colour edge to edge */
+.intro, .featured { position: relative; isolation: isolate; }
+.intro::before, .featured::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 100vw; transform: translateX(-50%); z-index: -1; }
+.intro { padding-top: 70px; padding-bottom: 64px; }
+.intro::before { background: var(--sec-white); }
+.featured { padding-top: 56px; padding-bottom: 56px; }
+.featured::before { background: var(--sec-mint); }
+.saga { background: linear-gradient(180deg, #fbf6ea 0%, var(--sec-cream) 100%); padding-bottom: 40px; }
+.facts { max-width: none; background: var(--sec-cream); padding: 6px 16px 70px; }
+.founders { background: var(--sec-white); padding: 70px 0; }
+.cert-strip { background: var(--sec-sage); padding: 70px 0 60px; }
+.cert-mini { background: #fff; }
+.video-sec { background: var(--sec-ivory); }
+.why { background: var(--sec-white); }
+.herbs { background: var(--sec-cream); }
+/* how to use: warm, golden-brown stage so it reads apart from the dark green 3D journey */
+.ritual { background: radial-gradient(80% 70% at 30% 40%, #5a3d1c 0%, #33220f 55%, #1d1308 100%); }
+.rt-step.on { border-color: rgba(233, 207, 134, .7); }
+/* a fine gold rule where a light section meets the next one */
+.banners, .saga, .founders, .cert-strip, .video-sec, .why { border-top: 1px solid rgba(195, 154, 53, .14); }
+@media (max-width: 860px) {
+  .intro { padding-top: 48px; padding-bottom: 44px; }
+  .founders, .cert-strip { padding: 48px 0; }
+  .facts { padding-bottom: 48px; }
+}
