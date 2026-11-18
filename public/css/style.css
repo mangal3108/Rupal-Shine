@@ -835,3 +835,83 @@ body.has-sticky .toast { bottom: 92px; }
 .gal-item:nth-child(n+9) { display: none; }
 .gal-cta { text-align: center; margin: 30px 0 0; }
 @media (max-width: 760px) { .gal-grid { grid-template-columns: 1fr 1fr; gap: 10px; } .gal-item { border-radius: 16px; } }
+
+/* ================= our story: chapters on a golden thread ================= */
+.saga { position: relative; background: linear-gradient(180deg, #fff 0%, #fbf7ee 18%, #f6efdf 100%); padding: 84px 0 92px; overflow: hidden; }
+.saga::before { content: ""; position: absolute; inset: 0; background: radial-gradient(60% 40% at 50% 0%, rgba(227, 198, 118, .18), transparent 70%); pointer-events: none; }
+.saga-head { position: relative; text-align: center; max-width: 720px; margin: 0 auto 56px; }
+.saga-head .kicker { color: #9a6b2c; }
+.saga-head h2 { font-size: clamp(34px, 4.6vw, 58px); color: #3e2a14; line-height: 1.05; }
+.saga-head p { color: #6b5a44; font-size: 17px; margin-top: 14px; }
+.saga-line { position: relative; display: grid; gap: clamp(48px, 7vw, 96px); }
+.saga-thread { position: absolute; left: 50%; top: 10px; bottom: 10px; width: 2px; transform: translateX(-50%); background: rgba(195, 154, 53, .22); border-radius: 2px; }
+.saga-thread i { position: absolute; inset: 0; background: linear-gradient(180deg, #e9cf86, var(--gold) 60%, #a8822a); transform-origin: top; transform: scaleY(var(--p, 0)); border-radius: 2px; box-shadow: 0 0 12px rgba(227, 198, 118, .7); }
+.chapter { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: clamp(40px, 7vw, 110px); align-items: center; }
+.chapter.flip .ch-photo { order: 2; }
+.chapter.flip .ch-copy { order: 1; text-align: right; }
+.ch-dot { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: #3e2a14; color: #f1d9a8; font: 700 17px var(--serif); box-shadow: 0 0 0 6px #f6efdf, 0 0 0 7px rgba(195, 154, 53, .6), 0 10px 26px rgba(62, 42, 20, .3); z-index: 2; }
+.ch-photo { margin: 0; display: flex; flex-direction: column; align-items: center; }
+.ch-frame { position: relative; width: min(360px, 100%); aspect-ratio: 4 / 5; border-radius: 22px; overflow: hidden; background: #2b1d0e; box-shadow: 0 30px 60px rgba(62, 42, 20, .28), 0 0 0 8px #fff, 0 0 0 9px rgba(195, 154, 53, .5); transform: rotate(-2.5deg); transition: transform .8s cubic-bezier(.2, .7, .2, 1); }
+.chapter.flip .ch-frame { transform: rotate(2.5deg); }
+.chapter:hover .ch-frame { transform: rotate(0) scale(1.02); }
+.ch-frame img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 22%; display: block; transform: scale(1.08); transition: transform 6s ease-out; }
+.chapter .ch-photo.in .ch-frame img { transform: scale(1); }
+.ch-frame::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 60%, rgba(43, 29, 14, .35)); pointer-events: none; }
+.ch-photo figcaption { display: inline-flex; align-items: center; gap: 7px; margin-top: 26px; padding: 7px 16px; background: #3e2a14; color: #f6e7c4; border-radius: 999px; font: 600 11.5px var(--sans); letter-spacing: .1em; text-transform: uppercase; }
+.ch-photo figcaption svg { width: 13px; height: 13px; color: #e3c676; }
+.ch-label { display: inline-block; font: 700 12px var(--sans); letter-spacing: .22em; text-transform: uppercase; color: #9a6b2c; margin-bottom: 10px; }
+.ch-copy h3 { font: 600 clamp(28px, 3.2vw, 40px)/1.1 var(--serif); color: #3e2a14; margin: 0 0 16px; }
+.ch-copy p { color: #4a3d30; font-size: 17px; line-height: 1.75; margin: 0 0 12px; }
+.ch-copy b { color: #3e2a14; font-weight: 600; background: linear-gradient(transparent 62%, rgba(227, 198, 118, .45) 62%); }
+.saga-sign { text-align: center; margin: 60px 0 0; font: italic 600 26px var(--serif); color: #3e2a14; }
+@media (max-width: 860px) {
+  .saga { padding: 56px 0 64px; }
+  .saga-head { margin-bottom: 36px; }
+  .saga-thread { left: 22px; }
+  .chapter, .chapter.flip { grid-template-columns: 1fr; gap: 22px; padding-left: 52px; }
+  .chapter.flip .ch-photo, .chapter.flip .ch-copy { order: 0; text-align: left; }
+  .ch-dot { left: 22px; top: 0; transform: translate(-50%, 0); width: 40px; height: 40px; font-size: 14px; }
+  .ch-photo { align-items: flex-start; }
+  .ch-frame { width: min(300px, 100%); }
+  .ch-copy p { font-size: 16px; }
+}
+
+/* ================= how to use: cinematic ritual ================= */
+.ritual { position: relative; overflow: hidden; color: #f3ead2; padding: 90px 0; background: radial-gradient(80% 70% at 30% 40%, #2c5a37 0%, #163420 55%, #0c1f13 100%); }
+.ritual .journey-dust { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.ritual-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: clamp(32px, 6vw, 90px); align-items: center; }
+.ritual-stage { position: relative; aspect-ratio: 4 / 5; max-height: 640px; display: grid; place-items: center; }
+.rt-glow { position: absolute; width: 78%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(227, 198, 118, .45), rgba(227, 198, 118, 0) 68%); filter: blur(10px); animation: rt-breathe 6s ease-in-out infinite; }
+.rt-ring { position: absolute; width: 86%; aspect-ratio: 1; border-radius: 50%; border: 1px dashed rgba(227, 198, 118, .45); animation: rt-spin 40s linear infinite; }
+@keyframes rt-breathe { 50% { transform: scale(1.08); opacity: .8; } }
+@keyframes rt-spin { to { transform: rotate(360deg); } }
+.rt-shot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 30px; box-shadow: 0 40px 80px rgba(0, 0, 0, .5), 0 0 0 1px rgba(227, 198, 118, .35); opacity: 0; transform: scale(1.06) translateY(14px); transition: opacity 1s ease, transform 1.4s cubic-bezier(.2, .7, .2, 1); }
+.rt-shot.on { opacity: 1; transform: none; }
+.rt-badge { position: absolute; left: 50%; bottom: -16px; transform: translateX(-50%); background: linear-gradient(135deg, #e9cf86, #c39a35); color: #2b1d0e; font: 700 12px var(--sans); letter-spacing: .14em; text-transform: uppercase; padding: 9px 18px; border-radius: 999px; box-shadow: 0 10px 24px rgba(0, 0, 0, .35); white-space: nowrap; z-index: 2; }
+.ritual-copy .kicker { color: #e3c676; }
+.ritual-copy h2 { color: #fff; font-size: clamp(34px, 4.4vw, 54px); line-height: 1.05; margin-bottom: 26px; }
+.rt-steps { list-style: none; margin: 0 0 28px; padding: 0; display: grid; gap: 10px; }
+.rt-step { border-radius: 18px; border: 1px solid rgba(227, 198, 118, .18); background: rgba(255, 255, 255, .04); transition: background .4s, border-color .4s; }
+.rt-step.on { background: rgba(255, 255, 255, .09); border-color: rgba(227, 198, 118, .55); }
+.rt-step button { display: flex; align-items: center; gap: 14px; width: 100%; background: none; border: 0; color: inherit; text-align: left; padding: 14px 16px; cursor: pointer; font: inherit; }
+.rt-num { position: relative; width: 40px; height: 40px; flex: none; display: grid; place-items: center; }
+.rt-num svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.rt-num circle { fill: none; stroke: rgba(227, 198, 118, .25); stroke-width: 2; }
+.rt-num .rt-prog { stroke: #e3c676; stroke-dasharray: 113.1; stroke-dashoffset: 113.1; stroke-linecap: round; }
+.rt-step.done .rt-prog { stroke-dashoffset: 0; }
+.rt-step.on .rt-prog { animation: rt-fill var(--rt-ms, 5000ms) linear forwards; }
+.ritual.paused .rt-step.on .rt-prog { animation-play-state: paused; }
+@keyframes rt-fill { to { stroke-dashoffset: 0; } }
+.rt-num b { font: 700 16px var(--serif); color: #e3c676; }
+.rt-title { font: 600 22px var(--serif); color: #fff; }
+.rt-step p { margin: 0; max-height: 0; overflow: hidden; padding: 0 18px 0 70px; color: rgba(243, 234, 210, .82); font-size: 15.5px; line-height: 1.6; transition: max-height .5s ease, padding .5s ease; }
+.rt-step.on p { max-height: 160px; padding-bottom: 16px; }
+.rt-cta { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.rt-cta .link { color: #e3c676; }
+@media (max-width: 860px) {
+  .ritual { padding: 56px 0 64px; }
+  .ritual-row { grid-template-columns: 1fr; gap: 40px; }
+  .ritual-stage { width: min(340px, 86%); margin: 0 auto; }
+  .rt-title { font-size: 19px; }
+}
+@media (prefers-reduced-motion: reduce) { .rt-glow, .rt-ring { animation: none; } .rt-shot, .ch-frame img { transition: opacity .4s; transform: none !important; } .saga-thread i { transform: none; } }

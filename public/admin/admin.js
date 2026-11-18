@@ -546,10 +546,21 @@
         <div class="card"><h3>Home page — our story</h3><div class="fields">
           ${field('Small heading', 'storyKicker', s.storyKicker)}
           ${field('Heading', 'storyTitle', s.storyTitle)}
-          ${area('Story', 'storyText', s.storyText, { rows: 9, hint: 'Leave an empty line between paragraphs. Put **two stars** around words to make them bold. Leave the story empty to hide this section.' })}
+          ${field('Line under the heading', 'storyIntro', s.storyIntro, { full: true })}
           ${field('Signature', 'storySign', s.storySign)}
-          ${field('Line under the photo', 'storyCaption', s.storyCaption)}
-          <div class="field full"><span>Photo</span><div class="images" id="storyPick"></div></div>
+        </div>
+        <p class="muted" style="margin:6px 0 10px">The story is told in chapters along a golden line, each with its own photo. Leave a chapter's heading and text empty to remove it. Put **two stars** around words to highlight them.</p>
+        ${[0, 1, 2, 3].map(i => { const c = (s.storyChapters || [])[i] || {}; return `<div class="chapter-edit"><h4>Chapter ${i + 1}</h4><div class="fields">
+          ${field('Small label', 'ch' + i + '_label', c.label, { attrs: 'maxlength="60" placeholder="e.g. Chapter one · Her"' })}
+          ${field('Heading', 'ch' + i + '_title', c.title, { attrs: 'maxlength="120"' })}
+          ${area('Text', 'ch' + i + '_text', c.text, { rows: 5 })}
+          ${field('Line under the photo', 'ch' + i + '_caption', c.caption, { attrs: 'maxlength="80"' })}
+          <div class="field"><span>Photo</span><div class="images" id="chPick${i}"></div></div>
+        </div></div>`; }).join('')}
+        <div class="fields" style="margin-top:10px">
+          ${area('Short version of the story (About page; also shown if all chapters are empty)', 'storyText', s.storyText, { rows: 6 })}
+          ${field('Line under the photo (short version)', 'storyCaption', s.storyCaption)}
+          <div class="field full"><span>Photo (short version)</span><div class="images" id="storyPick"></div></div>
         </div></div>
         <div class="card"><h3>Home page — founders</h3><div class="fields">
           <div class="field full"><span>Show this section</span>${check('Show “Meet our founders” on the home page', 'foundersShow', s.foundersShow !== false)}</div>
@@ -559,11 +570,11 @@
           ${area('Text', 'foundersText', s.foundersText, { rows: 5, hint: 'Leave an empty line between paragraphs. Put **two stars** around words to make them bold.' })}
           <div class="field full"><span>Photo</span><div class="images" id="foundersPick"></div></div>
         </div></div>
-        <div class="card"><h3>Home page — photo gallery</h3><div class="fields">
-          <div class="field full"><span>Show this section</span>${check('Show the photo gallery on the home page', 'galleryShow', s.galleryShow !== false)}</div>
-          ${field('Small heading', 'galleryKicker', s.galleryKicker)}
-          ${field('Heading', 'galleryTitle', s.galleryTitle)}
-          <div class="field full"><span>Photos (up to 8 show)</span><div class="images" id="galleryPick"></div><small>Use ★ to choose which photo comes first. Shoppers can tap any photo to see it full size.</small></div>
+        <div class="card"><h3>Home page — how to use</h3><div class="fields">
+          <div class="field full"><span>Show this section</span>${check('Show the animated “how to use” section on the home page', 'ritualShow', s.ritualShow !== false)}</div>
+          ${field('Small heading', 'ritualKicker', s.ritualKicker)}
+          ${field('Heading', 'ritualTitle', s.ritualTitle)}
+          <div class="field full"><span>Photos — one per step</span><div class="images" id="ritualPick"></div><small>Photo 1 shows during step 1, photo 2 during step 2, and so on; extra steps go back to photo 1. The steps themselves come from <b>Products → How to use</b>.</small></div>
         </div></div>
         <div class="card"><h3>Home page — video</h3><div class="fields">
           ${field('Small heading', 'videoKicker', s.videoKicker, { hint: 'Leave empty to show “Watch”.' })}
@@ -599,13 +610,19 @@
       imagePicker(main.querySelector('#heroPick'), hero, { multiple: false });
       imagePicker(main.querySelector('#logoPick'), logo, { multiple: false });
       const story = s.storyImage ? [s.storyImage] : [];
-      const founders = s.foundersImage ? [s.foundersImage] : [], gallery = [...(s.galleryImages || [])];
+      const founders = s.foundersImage ? [s.foundersImage] : [], ritual = [...(s.ritualImages || [])];
+      const chPhotos = [0, 1, 2, 3].map(i => { const c = (s.storyChapters || [])[i]; return c && c.image ? [c.image] : []; });
       imagePicker(main.querySelector('#storyPick'), story, { multiple: false });
       imagePicker(main.querySelector('#foundersPick'), founders, { multiple: false });
-      imagePicker(main.querySelector('#galleryPick'), gallery);
+      imagePicker(main.querySelector('#ritualPick'), ritual);
+      chPhotos.forEach((list, i) => imagePicker(main.querySelector('#chPick' + i), list, { multiple: false }));
       main.querySelector('#setForm').onsubmit = async e => {
         e.preventDefault();
-        try { await api('PUT', '/settings', { ...formData(e.target), heroImage: hero[0] || '', logoImage: logo[0] || '', storyImage: story[0] || '', foundersImage: founders[0] || '', galleryImages: gallery }); toast('Settings saved'); }
+        const d = formData(e.target);
+        // the chapter fields travel as one list
+        const storyChapters = [0, 1, 2, 3].map(i => ({ label: d['ch' + i + '_label'], title: d['ch' + i + '_title'], text: d['ch' + i + '_text'], caption: d['ch' + i + '_caption'], image: chPhotos[i][0] || '' }));
+        for (const k of Object.keys(d)) if (/^ch\d_/.test(k)) delete d[k];
+        try { await api('PUT', '/settings', { ...d, storyChapters, heroImage: hero[0] || '', logoImage: logo[0] || '', storyImage: story[0] || '', foundersImage: founders[0] || '', ritualImages: ritual }); toast('Settings saved'); }
         catch (ex) { fail(ex); }
       };
     },

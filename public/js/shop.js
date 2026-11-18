@@ -389,6 +389,47 @@
     $('.wa-btn').addEventListener('click', () => { bubble.hidden = true; });
   }
 
+  /* ---------- "How to use" ritual: steps play in turn, the photo follows the step ---------- */
+  const ritual = $('[data-ritual]');
+  if (ritual) {
+    const steps = [...ritual.querySelectorAll('[data-rt-step]')], shots = [...ritual.querySelectorAll('.rt-shot')], badge = $('[data-rt-badge]', ritual);
+    const MS = 5000, still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let cur = 0, timer = null, visible = false, started = false;
+    ritual.style.setProperty('--rt-ms', MS + 'ms');
+    const show = i => {
+      cur = (i + steps.length) % steps.length;
+      steps.forEach((s, j) => {
+        s.classList.toggle('on', j === cur); s.classList.toggle('done', j < cur);
+        $('button', s).setAttribute('aria-expanded', j === cur);
+      });
+      // restart the progress ring animation on the active step
+      const ring = $('.rt-prog', steps[cur]); ring.style.animation = 'none'; void ring.getBoundingClientRect(); ring.style.animation = '';
+      const shot = +steps[cur].dataset.shot;
+      shots.forEach((im, j) => im.classList.toggle('on', j === shot));
+      badge.textContent = `Step ${cur + 1} / ${steps.length}`;
+    };
+    const run = () => { clearInterval(timer); timer = visible && !still ? setInterval(() => show(cur + 1), MS) : null; ritual.classList.toggle('paused', !timer); };
+    ritual.addEventListener('click', e => { const s = e.target.closest('[data-rt-step]'); if (s && e.target.closest('button')) { started = true; show(+s.dataset.rtStep); run(); } });
+    ritual.addEventListener('mouseenter', () => { clearInterval(timer); ritual.classList.add('paused'); });
+    ritual.addEventListener('mouseleave', run);
+    // starts from step 1 the first time it comes into view; after that it carries on where it was
+    if ('IntersectionObserver' in window) new IntersectionObserver(es => { visible = es[0].isIntersecting; if (visible && !started) { started = true; show(0); } run(); }, { threshold: 0.35 }).observe(ritual);
+  }
+
+  /* ---------- our story: the golden thread fills as the reader scrolls ---------- */
+  const saga = $('[data-saga]');
+  if (saga) {
+    const line = $('.saga-thread', saga);
+    let raf = 0;
+    const draw = () => {
+      raf = 0;
+      const r = line.getBoundingClientRect(), mid = innerHeight * 0.6;
+      saga.style.setProperty('--p', Math.max(0, Math.min(1, (mid - r.top) / r.height)).toFixed(3));
+    };
+    addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(draw); }, { passive: true });
+    addEventListener('resize', draw); draw();
+  }
+
   /* ---------- home banner slider: auto-plays, swipe on phones, pauses on hover ---------- */
   const bn = $('[data-banners]');
   if (bn) {

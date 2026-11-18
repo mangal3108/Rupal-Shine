@@ -278,22 +278,7 @@ ${bannerSlider(db)}
   <a class="round-btn" href="${journey.length ? '#journey' : '#featured'}" aria-label="Scroll down">${ICON.down}</a>
 </section>
 
-${s.storyText ? `<section class="story" id="story">
-  <div class="wrap">
-    <div class="story-card reveal">
-      <figure class="story-photo">
-        ${s.storyImage ? `<div class="story-frame"><img src="${esc(s.storyImage)}" alt="${esc(s.storyCaption || s.storyTitle)}" loading="lazy"></div>` : ''}
-        ${s.storyCaption ? `<figcaption>${ICON.leaf}${esc(s.storyCaption)}</figcaption>` : ''}
-      </figure>
-      <div class="story-copy">
-        ${s.storyKicker ? `<span class="kicker">${esc(s.storyKicker)}</span>` : ''}
-        <h2>${esc(s.storyTitle)}</h2>
-        ${rich(s.storyText)}
-        ${s.storySign ? `<p class="story-sign">— ${esc(s.storySign)}</p>` : ''}
-      </div>
-    </div>
-  </div>
-</section>
+${s.storyText || (s.storyChapters || []).length ? `${storyBlock(s)}
 <ul class="facts" aria-label="Good to know">${FACTS.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
 
 ${foundersBlock(s)}
@@ -304,7 +289,7 @@ ${videoBlock(s, f)}
 
 ${whyBlock(s, f)}
 
-${galleryBlock(s, f)}
+${ritualBlock(s, f, steps)}
 
 ${reviewsHome(reviews, f)}
 
@@ -358,17 +343,7 @@ ${f ? `<section class="featured" id="featured">
   </div>
 </section>` : ''}
 
-${steps.length ? `<section class="process wrap">
-  <h2 class="section-title reveal">How to Use</h2>
-  <div class="steps" style="--n:${steps.length}">
-    ${steps.map((st, i) => `<div class="step reveal" style="--d:${i}">
-      <div class="step-icon">${ICON.steps[i % 4]}</div>
-      <span class="step-dot">${i + 1}</span>
-      <h4>${esc(st.title || 'Step ' + (i + 1))}</h4>
-      <p>${esc(st.text)}</p>
-    </div>`).join('')}
-  </div>
-</section>` : ''}
+
 
 ${products.length > 1 ? `<section class="wrap products-sec">
   <h2 class="section-title reveal">Our Products</h2>
@@ -700,17 +675,76 @@ function foundersBlock(s) {
 </section>`;
 }
 
-// lifestyle photos of the bottle, tap to view full size
-function galleryBlock(s, f) {
-  const pics = (s.galleryImages || []).filter(Boolean);
-  if (s.galleryShow === false || !pics.length) return '';
-  return `<section class="gallery-sec" id="gallery">
+// "Our story" as chapters along a golden thread: her (mother) → them (Rupali & Ansar) → you (the bottle).
+// Falls back to the single story card when no chapters are set.
+function storyBlock(s) {
+  const chapters = (s.storyChapters || []).filter(c => c && (c.title || c.text));
+  if (!chapters.length) return `<section class="story" id="story">
   <div class="wrap">
-    <div class="sec-head reveal">${s.galleryKicker ? `<span class="kicker">${esc(s.galleryKicker)}</span>` : ''}<h2>${esc(s.galleryTitle || 'Gallery')}</h2></div>
-    <div class="gal-grid reveal">
-      ${pics.map((im, i) => `<a class="gal-item" href="${esc(im)}" data-lightbox data-caption="${esc(s.siteName)}"><img src="${esc(im)}" alt="${esc(s.siteName)} herbal oil" loading="lazy"></a>`).join('')}
+    <div class="story-card reveal">
+      <figure class="story-photo">
+        ${s.storyImage ? `<div class="story-frame"><img src="${esc(s.storyImage)}" alt="${esc(s.storyCaption || s.storyTitle)}" loading="lazy"></div>` : ''}
+        ${s.storyCaption ? `<figcaption>${ICON.leaf}${esc(s.storyCaption)}</figcaption>` : ''}
+      </figure>
+      <div class="story-copy">
+        ${s.storyKicker ? `<span class="kicker">${esc(s.storyKicker)}</span>` : ''}
+        <h2>${esc(s.storyTitle)}</h2>
+        ${rich(s.storyText)}
+        ${s.storySign ? `<p class="story-sign">— ${esc(s.storySign)}</p>` : ''}
+      </div>
     </div>
-    ${f ? `<p class="gal-cta"><a class="btn btn-buy" href="/product/${esc(f.slug)}">Shop ${esc(f.name)} ${ICON.arrow}</a></p>` : ''}
+  </div>
+</section>`;
+  return `<section class="saga" id="story" data-saga>
+  <div class="wrap">
+    <div class="saga-head reveal">
+      ${s.storyKicker ? `<span class="kicker">${esc(s.storyKicker)}</span>` : ''}
+      <h2>${esc(s.storyTitle)}</h2>
+      ${s.storyIntro ? `<p>${esc(s.storyIntro)}</p>` : ''}
+    </div>
+    <div class="saga-line">
+      <span class="saga-thread" aria-hidden="true"><i></i></span>
+      ${chapters.map((c, i) => `<article class="chapter${i % 2 ? ' flip' : ''}">
+        <figure class="ch-photo reveal">
+          ${c.image ? `<div class="ch-frame"><img src="${esc(c.image)}" alt="${esc(c.caption || c.title)}" loading="lazy"></div>` : ''}
+          ${c.caption ? `<figcaption>${ICON.leaf}${esc(c.caption)}</figcaption>` : ''}
+        </figure>
+        <span class="ch-dot" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span>
+        <div class="ch-copy reveal">
+          ${c.label ? `<span class="ch-label">${esc(c.label)}</span>` : ''}
+          <h3>${esc(c.title)}</h3>
+          ${rich(c.text)}
+        </div>
+      </article>`).join('')}
+    </div>
+    ${s.storySign ? `<p class="saga-sign reveal">— ${esc(s.storySign)}</p>` : ''}
+  </div>
+</section>`;
+}
+
+// "How to use" ritual: the bottle photos change with each step, steps play one after another
+function ritualBlock(s, f, steps) {
+  const shots = (s.ritualImages || []).filter(Boolean);
+  if (s.ritualShow === false || !steps.length || !shots.length) return '';
+  const shotFor = i => i < shots.length ? i : 0;
+  return `<section class="ritual" id="how-to-use" data-ritual style="--n:${steps.length}">
+  <canvas class="journey-dust" data-dust="dark" aria-hidden="true"></canvas>
+  <div class="wrap ritual-row">
+    <div class="ritual-stage reveal" aria-hidden="true">
+      <span class="rt-glow"></span><span class="rt-ring"></span>
+      ${shots.map((im, i) => `<img class="rt-shot${i ? '' : ' on'}" src="${esc(im)}" alt="" loading="lazy" data-shot="${i}">`).join('')}
+      <span class="rt-badge" data-rt-badge>Step 1 / ${steps.length}</span>
+    </div>
+    <div class="ritual-copy">
+      <div class="reveal">${s.ritualKicker ? `<span class="kicker">${esc(s.ritualKicker)}</span>` : ''}<h2>${esc(s.ritualTitle || 'How to use')}</h2></div>
+      <ol class="rt-steps">
+        ${steps.map((st, i) => `<li class="rt-step${i ? '' : ' on'}" data-rt-step="${i}" data-shot="${shotFor(i)}">
+          <button type="button" aria-expanded="${i ? 'false' : 'true'}"><span class="rt-num"><svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18"/><circle class="rt-prog" cx="20" cy="20" r="18"/></svg><b>${i + 1}</b></span><span class="rt-title">${esc(st.title || 'Step ' + (i + 1))}</span></button>
+          <p>${esc(st.text)}</p>
+        </li>`).join('')}
+      </ol>
+      ${f ? `<div class="rt-cta reveal"><button class="btn btn-buy" data-add="${esc(f.id)}" data-name="${esc(f.name)}" data-go="/checkout"${f.stock < 1 ? ' disabled' : ''}>Start your ritual — ${money(f.price)}</button><a class="link" href="/product/${esc(f.slug)}#reviews">See details ${ICON.arrow}</a></div>` : ''}
+    </div>
   </div>
 </section>`;
 }

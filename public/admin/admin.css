@@ -181,3 +181,5 @@ table.mini tr.total td { border-top: 1px solid var(--line); font-weight: 600; pa
 .banner-row { grid-template-columns: 220px 1fr; }
 .banner-row .doc-img img { height: 110px; object-fit: cover; }
 @media (max-width: 600px) { .banner-row { grid-template-columns: 1fr; } }
+.chapter-edit { border: 1px solid var(--line); border-left: 4px solid var(--gold); border-radius: 14px; padding: 12px 14px 4px; margin-bottom: 12px; background: #fffdf8; }
+.chapter-edit h4 { margin: 0 0 8px; font: 600 14px 'Poppins', sans-serif; color: var(--green); }

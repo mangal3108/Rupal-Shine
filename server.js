@@ -203,8 +203,30 @@ const FOUNDER_DEFAULTS = {
   galleryShow: true,
   galleryKicker: 'In every home',
   galleryTitle: 'Made with nature, made for you',
-  galleryImages: LIFESTYLE_PHOTOS
+  galleryImages: LIFESTYLE_PHOTOS,
+  // "How to use" ritual: front of the bottle, then the two back-label photos
+  ritualShow: true,
+  ritualKicker: 'The Rupali Shine ritual',
+  ritualTitle: 'Four simple steps to stronger hair',
+  ritualImages: ['/uploads/rupali-bottle-splash.webp', '/uploads/rupali-back-how-to-use.webp', '/uploads/rupali-back-ingredients.webp'],
+  // "Our story" as chapters, told by Ansar
+  storyIntro: 'Three people, one recipe — and now, you.',
+  storyChapters: [
+    {
+      label: 'Chapter one · Her', title: 'Her hands, her herbs', caption: 'My mother · in loving memory', image: '/uploads/rupali-mother-original.webp',
+      text: 'In our home, hair oil was never something you bought. **My mother made it herself** — warming pure coconut oil slowly, then adding jatamansi, brahmi, bhringraj, amla, hibiscus, methi, curry leaves and aloe vera, each in its own measure.\n\nShe never wrote the recipe down. It lived in her hands, and in the patient head massages she gave everyone she loved.'
+    },
+    {
+      label: 'Chapter two · Us', title: 'A promise we kept together', caption: 'Rupali · co-founder', image: '/uploads/rupali-portrait.webp',
+      text: 'When she passed away, we realised her recipe could quietly leave with her. **My wife Rupali would not let that happen.**\n\nTogether we pieced it back — the herbs, the quantities, the slow warming — batch after batch, until it smelled and felt exactly like hers. Today Rupali makes sure every bottle is prepared the way my mother would have wanted.'
+    },
+    {
+      label: 'Chapter three · You', title: 'From our home to yours', caption: 'Handmade in small batches', image: '/uploads/rupali-bottle-herbs.webp',
+      text: 'Rupali Shine is that promise in a bottle — nine herbs in cold-pressed coconut oil, made by hand in small batches in Delhi.\n\nHer picture is on every label, because every bottle is still hers. **And every time you use it, her story continues with you.**'
+    }
+  ]
 };
+const BACK_LABEL_PHOTOS = ['/uploads/rupali-back-how-to-use.webp', '/uploads/rupali-back-ingredients.webp'];
 
 function prepare() {
 migrate();
@@ -229,6 +251,14 @@ if (!db.brandPhotosAdded) {
   if (f) for (const im of LIFESTYLE_PHOTOS) if (!f.images.includes(im)) f.images.push(im);
 }
 for (const [k, v] of Object.entries(FOUNDER_DEFAULTS)) if (db.settings[k] === undefined) db.settings[k] = v;
+// first run with the story chapters and back-label photos
+if (!db.storyChaptersAdded) {
+  db.storyChaptersAdded = true;
+  if (db.settings.storyTitle === 'This oil was my mother’s first') db.settings.storyTitle = 'A recipe that refused to be forgotten';
+  if (db.settings.storySign === 'Her son, Founder of Rupali Shine') db.settings.storySign = 'Ansar & Rupali Khan';
+  const f = db.products.find(p => p.featured) || db.products[0];
+  if (f) for (const im of BACK_LABEL_PHOTOS) if (!f.images.includes(im)) f.images.push(im);
+}
 // first run: the business's certificates and registrations, described exactly as issued
 if (!db.docsSeeded) {
   db.docsSeeded = true;
@@ -1335,7 +1365,13 @@ app.put('/api/admin/settings', (req, res) => {
   for (const k of ['journeyKicker', 'journeyTitle', 'storyKicker', 'storyTitle', 'storySign', 'storyCaption', 'videoKicker', 'videoTitle', 'whyKicker', 'whyTitle', 'foundersKicker', 'foundersTitle', 'foundersNames', 'galleryKicker', 'galleryTitle']) if (k in b) s[k] = str(b[k], 120);
   if ('foundersText' in b) s.foundersText = str(b.foundersText, 1500);
   if ('foundersImage' in b) s.foundersImage = safeImage(b.foundersImage);
-  for (const k of ['foundersShow', 'galleryShow']) if (k in b) s[k] = !!b[k];
+  for (const k of ['foundersShow', 'galleryShow', 'ritualShow']) if (k in b) s[k] = !!b[k];
+  for (const k of ['ritualKicker', 'ritualTitle', 'storyIntro']) if (k in b) s[k] = str(b[k], 160);
+  if ('ritualImages' in b) s.ritualImages = (Array.isArray(b.ritualImages) ? b.ritualImages : []).map(safeImage).filter(Boolean).slice(0, 6);
+  if ('storyChapters' in b) s.storyChapters = (Array.isArray(b.storyChapters) ? b.storyChapters : []).slice(0, 5).map(c => ({
+    label: str(c && c.label, 60), title: str(c && c.title, 120), caption: str(c && c.caption, 80),
+    image: safeImage(c && c.image), text: str(c && c.text, 1500)
+  })).filter(c => c.title || c.text);
   if ('galleryImages' in b) s.galleryImages = (Array.isArray(b.galleryImages) ? b.galleryImages : []).map(safeImage).filter(Boolean).slice(0, 12);
   if ('whyLines' in b) s.whyLines = list(b.whyLines, 8).join('\n');
   if ('videoCaption' in b) s.videoCaption = str(b.videoCaption, 300);
