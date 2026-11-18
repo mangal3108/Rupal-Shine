@@ -213,7 +213,7 @@
         ${field('Link when tapped (optional)', 'link', b ? b.link : '/shop', { attrs: 'maxlength="300" placeholder="/shop"', hint: 'A page on this site, e.g. /shop or /product/…, or a full https:// link.' })}
         ${field('Description (for search engines and screen readers)', 'alt', b && b.alt, { attrs: 'maxlength="140"' })}
         ${area('Private note (only you see this)', 'note', b && b.note, { rows: 2 })}
-        <div class="field full checks">${check('Show on the home page', 'published', b ? b.published : true)}</div>
+        <div class="field full checks">${check('Show on the website', 'published', b ? b.published : true)}${check('Also show large on the Our Story page', 'showOnStory', b ? b.showOnStory !== false : true)}</div>
       </div><p class="error" hidden></p>
       <div class="form-actions"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn">${b ? 'Save changes' : 'Add banner'}</button></div>
     </form>`);
@@ -238,7 +238,7 @@
           <div class="doc-list">${list.length ? list.map((b, i) => `<article class="doc banner-row ${b.published ? '' : 'off'}">
             <a class="doc-img" href="${esc(b.image)}" target="_blank" rel="noopener"><img src="${esc(b.image)}" alt=""></a>
             <div class="doc-body">
-              <div class="rv-head">${b.published ? '<span class="tag">On website</span>' : '<span class="tag off">Hidden</span>'}${b.mobileImage ? '<span class="tag gold">Has phone version</span>' : ''}</div>
+              <div class="rv-head">${b.published ? '<span class="tag">On website</span>' : '<span class="tag off">Hidden</span>'}${b.mobileImage ? '<span class="tag gold">Has phone version</span>' : ''}${b.published && b.showOnStory !== false ? '<span class="tag gold">Also on Our Story</span>' : ''}</div>
               <h3>${esc(b.alt || 'Banner ' + (i + 1))}</h3>
               <p class="muted">${b.link ? 'Opens ' + esc(b.link) : 'No link'}</p>
               ${b.note ? `<p class="doc-note">${esc(b.note)}</p>` : ''}
@@ -548,6 +548,9 @@
           ${field('Heading', 'storyTitle', s.storyTitle)}
           ${field('Line under the heading', 'storyIntro', s.storyIntro, { full: true })}
           ${field('Signature', 'storySign', s.storySign)}
+          ${field('Campaign photos — small heading', 'showcaseKicker', s.showcaseKicker, { hint: 'The section on the Our Story page that shows your banners large (choose which in Home banners).' })}
+          ${field('Campaign photos — heading', 'showcaseTitle', s.showcaseTitle)}
+          ${field('Campaign photos — text', 'showcaseText', s.showcaseText, { full: true })}
         </div>
         <p class="muted" style="margin:6px 0 10px">The story is told in chapters along a golden line, each with its own photo. Leave a chapter's heading and text empty to remove it. Put **two stars** around words to highlight them.</p>
         ${[0, 1, 2, 3].map(i => { const c = (s.storyChapters || [])[i] || {}; return `<div class="chapter-edit"><h4>Chapter ${i + 1}</h4><div class="fields">

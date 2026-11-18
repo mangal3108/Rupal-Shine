@@ -251,6 +251,15 @@ if (!db.brandPhotosAdded) {
   if (f) for (const im of LIFESTYLE_PHOTOS) if (!f.images.includes(im)) f.images.push(im);
 }
 for (const [k, v] of Object.entries(FOUNDER_DEFAULTS)) if (db.settings[k] === undefined) db.settings[k] = v;
+// the owner asked (18 Nov 2026) for the two campaign banners to be shown on the home slider and the Our Story page
+if (!db.campaignBannersShown) {
+  db.campaignBannersShown = true;
+  for (const b of db.banners) if (STARTER_BANNERS.some(x => x.image === b.image)) {
+    b.published = true; b.showOnStory = true;
+    b.note = 'Shown at the owner’s request. Keep the “4.4 star rating” and “100000+ sold” numbers true and provable — update the banner if they change.';
+  }
+}
+for (const [k, v] of Object.entries({ showcaseKicker: 'From our campaign', showcaseTitle: 'Rupali, with the oil that started it all', showcaseText: 'The face of Rupali Shine — and the hands that make sure every bottle is right.' })) if (db.settings[k] === undefined) db.settings[k] = v;
 // first run with the story chapters and back-label photos
 if (!db.storyChaptersAdded) {
   db.storyChaptersAdded = true;
@@ -1239,7 +1248,7 @@ function bannerFrom(b, existing) {
   const link = str(b.link, 300);
   if (link && !/^(\/[\w\-./#?=&%]*|https?:\/\/\S+)$/.test(link)) throw new Error('The link must be a page on this site (e.g. /shop) or start with https://');
   const x = existing || { id: crypto.randomUUID(), createdAt: new Date().toISOString() };
-  return Object.assign(x, { image, mobileImage: safeImage(b.mobileImage), link, alt: str(b.alt, 140), note: str(b.note, 700), published: !!b.published });
+  return Object.assign(x, { image, mobileImage: safeImage(b.mobileImage), link, alt: str(b.alt, 140), note: str(b.note, 700), published: !!b.published, showOnStory: !!b.showOnStory });
 }
 app.get('/api/admin/banners', (req, res) => res.json(db.banners));
 app.post('/api/admin/banners', (req, res) => {
@@ -1366,7 +1375,8 @@ app.put('/api/admin/settings', (req, res) => {
   if ('foundersText' in b) s.foundersText = str(b.foundersText, 1500);
   if ('foundersImage' in b) s.foundersImage = safeImage(b.foundersImage);
   for (const k of ['foundersShow', 'galleryShow', 'ritualShow']) if (k in b) s[k] = !!b[k];
-  for (const k of ['ritualKicker', 'ritualTitle', 'storyIntro']) if (k in b) s[k] = str(b[k], 160);
+  for (const k of ['ritualKicker', 'ritualTitle', 'storyIntro', 'showcaseKicker', 'showcaseTitle']) if (k in b) s[k] = str(b[k], 160);
+  if ('showcaseText' in b) s.showcaseText = str(b.showcaseText, 400);
   if ('ritualImages' in b) s.ritualImages = (Array.isArray(b.ritualImages) ? b.ritualImages : []).map(safeImage).filter(Boolean).slice(0, 6);
   if ('storyChapters' in b) s.storyChapters = (Array.isArray(b.storyChapters) ? b.storyChapters : []).slice(0, 5).map(c => ({
     label: str(c && c.label, 60), title: str(c && c.title, 120), caption: str(c && c.caption, 80),

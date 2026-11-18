@@ -842,7 +842,36 @@ function contact(db) {
   return layout(db, 'Contact', body, { path: '/contact' });
 }
 
+// campaign banners shown large on the Our Story page, tap to view full size
+function showcaseBlock(db) {
+  const s = db.settings, items = (db.banners || []).filter(b => b.image && b.showOnStory !== false && b.published);
+  if (!items.length) return '';
+  return `<section class="showcase" id="campaign">
+  <div class="wrap">
+    <div class="sec-head reveal">${s.showcaseKicker ? `<span class="kicker">${esc(s.showcaseKicker)}</span>` : ''}<h2>${esc(s.showcaseTitle || 'In the spotlight')}</h2>${s.showcaseText ? `<p>${esc(s.showcaseText)}</p>` : ''}</div>
+    <div class="sc-list">
+      ${items.map((b, i) => `<a class="sc-card reveal${i % 2 ? ' flip' : ''}" href="${esc(b.image)}" data-lightbox data-caption="${esc(b.alt)}" style="--d:${i}">
+        <span class="sc-glow" aria-hidden="true"></span>
+        <img src="${esc(b.image)}" alt="${esc(b.alt)}" loading="lazy">
+        <span class="sc-zoom">Tap to view full size</span>
+      </a>`).join('')}
+    </div>
+  </div>
+</section>`;
+}
+
 function page(db, pg) {
+  // the Our Story page tells the full story: chapters, campaign photos, founders
+  if (pg.slug === 'about' && (db.settings.storyChapters || []).length) {
+    const s = db.settings, f = (db.products || []).find(p => p.active && p.featured) || (db.products || []).find(p => p.active);
+    const body = `
+<section class="page-head story-head"><div class="wrap"><span class="kicker">${esc(s.storyKicker || 'Our story')}</span><h1>${esc(pg.title)}</h1></div></section>
+${storyBlock(s)}
+${showcaseBlock(db)}
+${foundersBlock(s)}
+${f ? `<section class="story-cta"><div class="wrap reveal"><h2>Be part of her story</h2><p>Nine herbs, cold-pressed coconut oil, made by hand.</p><a class="btn btn-buy" href="/product/${esc(f.slug)}">Shop ${esc(f.name)} ${ICON.arrow}</a></div></section>` : ''}`;
+    return layout(db, pg.title, body, { path: '/page/' + pg.slug, desc: s.storyIntro || pg.title });
+  }
   const body = `
 <section class="page-head"><div class="wrap"><h1>${esc(pg.title)}</h1></div></section>
 <section class="wrap pad prose">${paras(pg.content)}</section>`;
