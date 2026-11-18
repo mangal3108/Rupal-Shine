@@ -70,7 +70,7 @@
   }
 
   /* ---------- shell ---------- */
-  const NAV = [['dashboard', 'Dashboard'], ['products', 'Products'], ['orders', 'Orders'], ['reviews', 'Reviews'], ['documents', 'Certificates'], ['offers', 'Offers & Coupons'], ['payments', 'Payments'], ['pages', 'Pages'], ['messages', 'Messages'], ['settings', 'Site Settings'], ['account', 'Account']];
+  const NAV = [['dashboard', 'Dashboard'], ['products', 'Products'], ['orders', 'Orders'], ['reviews', 'Reviews'], ['documents', 'Certificates'], ['banners', 'Home banners'], ['offers', 'Offers & Coupons'], ['payments', 'Payments'], ['pages', 'Pages'], ['messages', 'Messages'], ['settings', 'Site Settings'], ['account', 'Account']];
   function shell() {
     app.innerHTML = `<div class="shell">
       <aside class="side">
@@ -202,7 +202,73 @@
     };
   }
 
+  /* ---------- banner form ---------- */
+  function bannerForm(b, done) {
+    const img = b && b.image ? [b.image] : [], mob = b && b.mobileImage ? [b.mobileImage] : [];
+    openModal(b ? 'Edit banner' : 'Add a banner', `<form id="bnForm">
+      <p class="note">Best size: 1600 × 800 pixels (2:1). Keep every number and claim on a banner true — star ratings, “sold” counts and health promises must be something you can prove.</p>
+      <div class="fields">
+        <div class="field full"><span>Banner image</span><div class="images" id="bnPick"></div></div>
+        <div class="field full"><span>Phone version (optional)</span><div class="images" id="bnMob"></div><small>A taller image (e.g. 1200 × 800) for phones. Leave empty to use the main image.</small></div>
+        ${field('Link when tapped (optional)', 'link', b ? b.link : '/shop', { attrs: 'maxlength="300" placeholder="/shop"', hint: 'A page on this site, e.g. /shop or /product/…, or a full https:// link.' })}
+        ${field('Description (for search engines and screen readers)', 'alt', b && b.alt, { attrs: 'maxlength="140"' })}
+        ${area('Private note (only you see this)', 'note', b && b.note, { rows: 2 })}
+        <div class="field full checks">${check('Show on the home page', 'published', b ? b.published : true)}</div>
+      </div><p class="error" hidden></p>
+      <div class="form-actions"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn">${b ? 'Save changes' : 'Add banner'}</button></div>
+    </form>`);
+    imagePicker(modal.querySelector('#bnPick'), img, { multiple: false });
+    imagePicker(modal.querySelector('#bnMob'), mob, { multiple: false });
+    modal.querySelector('#bnForm').onsubmit = async e => {
+      e.preventDefault();
+      try {
+        const list = await api(b ? 'PUT' : 'POST', '/banners' + (b ? '/' + b.id : ''), { ...formData(e.target), image: img[0] || '', mobileImage: mob[0] || '' });
+        closeModal(); toast(b ? 'Banner saved' : 'Banner added'); done(list);
+      } catch (ex) { const er = modal.querySelector('.error'); er.textContent = ex.message; er.hidden = false; }
+    };
+  }
+
   const VIEWS = {
+    /* ---------- home banners ---------- */
+    async banners(main) {
+      let list = await api('GET', '/banners');
+      const draw = () => {
+        main.innerHTML = `<div class="top"><h1>Home banners</h1><div class="actions"><a class="btn ghost" href="/" target="_blank" rel="noopener">View home page ↗</a><button class="btn" data-new>+ Add banner</button></div></div>
+          <div class="card"><p class="muted" style="margin:0">Banners slide under the hero section on the home page, changing every few seconds (shoppers can also swipe). Only banners marked <b>On website</b> are shown; with none, the slider is hidden.</p></div>
+          <div class="doc-list">${list.length ? list.map((b, i) => `<article class="doc banner-row ${b.published ? '' : 'off'}">
+            <a class="doc-img" href="${esc(b.image)}" target="_blank" rel="noopener"><img src="${esc(b.image)}" alt=""></a>
+            <div class="doc-body">
+              <div class="rv-head">${b.published ? '<span class="tag">On website</span>' : '<span class="tag off">Hidden</span>'}${b.mobileImage ? '<span class="tag gold">Has phone version</span>' : ''}</div>
+              <h3>${esc(b.alt || 'Banner ' + (i + 1))}</h3>
+              <p class="muted">${b.link ? 'Opens ' + esc(b.link) : 'No link'}</p>
+              ${b.note ? `<p class="doc-note">${esc(b.note)}</p>` : ''}
+              <div class="actions">
+                <button class="btn ghost sm" data-move="up" data-id="${esc(b.id)}"${i ? '' : ' disabled'} aria-label="Move up">↑</button><button class="btn ghost sm" data-move="down" data-id="${esc(b.id)}"${i < list.length - 1 ? '' : ' disabled'} aria-label="Move down">↓</button>
+                <button class="btn ${b.published ? 'ghost' : ''} sm" data-pub="${esc(b.id)}">${b.published ? 'Hide' : 'Show on website'}</button>
+                <button class="btn ghost sm" data-edit="${esc(b.id)}">Edit</button><button class="btn danger sm" data-del="${esc(b.id)}">Delete</button>
+              </div>
+            </div>
+          </article>`).join('') : '<div class="card"><p class="empty">No banners yet. Click “Add banner” to upload one.</p></div>'}</div>`;
+      };
+      draw();
+      main.onclick = async e => {
+        const t = e.target.closest('button'); if (!t) return;
+        const id = t.dataset.id || t.dataset.edit || t.dataset.del || t.dataset.pub;
+        const b = list.find(x => x.id === id);
+        try {
+          if ('new' in t.dataset) return bannerForm(null, l => { list = l; draw(); });
+          if (t.dataset.edit) return bannerForm(b, l => { list = l; draw(); });
+          if (t.dataset.move) list = await api('POST', `/banners/${id}/move`, { dir: t.dataset.move });
+          if (t.dataset.pub) {
+            if (!b.published && b.note && !confirm('Your note on this banner:\n\n' + b.note + '\n\nShow it on the website anyway?')) return;
+            list = await api('PUT', '/banners/' + id, { published: !b.published }); toast(b.published ? 'Hidden from website' : 'Now on the website');
+          }
+          if (t.dataset.del && confirm('Delete this banner?')) list = await api('DELETE', '/banners/' + id);
+          draw();
+        } catch (ex) { fail(ex); }
+      };
+    },
+
     /* ---------- certificates ---------- */
     async documents(main) {
       let docs = await api('GET', '/documents');
@@ -485,6 +551,20 @@
           ${field('Line under the photo', 'storyCaption', s.storyCaption)}
           <div class="field full"><span>Photo</span><div class="images" id="storyPick"></div></div>
         </div></div>
+        <div class="card"><h3>Home page — founders</h3><div class="fields">
+          <div class="field full"><span>Show this section</span>${check('Show “Meet our founders” on the home page', 'foundersShow', s.foundersShow !== false)}</div>
+          ${field('Small heading', 'foundersKicker', s.foundersKicker)}
+          ${field('Heading', 'foundersTitle', s.foundersTitle)}
+          ${field('Founder names', 'foundersNames', s.foundersNames, { hint: 'Shown on the photo and as the signature.' })}
+          ${area('Text', 'foundersText', s.foundersText, { rows: 5, hint: 'Leave an empty line between paragraphs. Put **two stars** around words to make them bold.' })}
+          <div class="field full"><span>Photo</span><div class="images" id="foundersPick"></div></div>
+        </div></div>
+        <div class="card"><h3>Home page — photo gallery</h3><div class="fields">
+          <div class="field full"><span>Show this section</span>${check('Show the photo gallery on the home page', 'galleryShow', s.galleryShow !== false)}</div>
+          ${field('Small heading', 'galleryKicker', s.galleryKicker)}
+          ${field('Heading', 'galleryTitle', s.galleryTitle)}
+          <div class="field full"><span>Photos (up to 8 show)</span><div class="images" id="galleryPick"></div><small>Use ★ to choose which photo comes first. Shoppers can tap any photo to see it full size.</small></div>
+        </div></div>
         <div class="card"><h3>Home page — video</h3><div class="fields">
           ${field('Small heading', 'videoKicker', s.videoKicker, { hint: 'Leave empty to show “Watch”.' })}
           ${field('Heading', 'videoTitle', s.videoTitle, { hint: 'Leave empty to show “See how it is made”.' })}
@@ -519,10 +599,13 @@
       imagePicker(main.querySelector('#heroPick'), hero, { multiple: false });
       imagePicker(main.querySelector('#logoPick'), logo, { multiple: false });
       const story = s.storyImage ? [s.storyImage] : [];
+      const founders = s.foundersImage ? [s.foundersImage] : [], gallery = [...(s.galleryImages || [])];
       imagePicker(main.querySelector('#storyPick'), story, { multiple: false });
+      imagePicker(main.querySelector('#foundersPick'), founders, { multiple: false });
+      imagePicker(main.querySelector('#galleryPick'), gallery);
       main.querySelector('#setForm').onsubmit = async e => {
         e.preventDefault();
-        try { await api('PUT', '/settings', { ...formData(e.target), heroImage: hero[0] || '', logoImage: logo[0] || '', storyImage: story[0] || '' }); toast('Settings saved'); }
+        try { await api('PUT', '/settings', { ...formData(e.target), heroImage: hero[0] || '', logoImage: logo[0] || '', storyImage: story[0] || '', foundersImage: founders[0] || '', galleryImages: gallery }); toast('Settings saved'); }
         catch (ex) { fail(ex); }
       };
     },

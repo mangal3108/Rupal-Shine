@@ -794,3 +794,44 @@ body.has-sticky .toast { bottom: 92px; }
   .cert-img img { max-height: 360px; margin: 0 auto; }
   .cert-zoom { opacity: 1; }
 }
+
+/* ================= banner slider ================= */
+.banners { padding: 34px 0 10px; background: #fff; }
+.bn-frame { position: relative; border-radius: 26px; overflow: hidden; box-shadow: 0 22px 54px rgba(31, 81, 48, .16); background: #eef6ec; }
+.bn-track { display: flex; transition: transform .6s cubic-bezier(.2, .7, .2, 1); touch-action: pan-y; }
+.bn-slide { position: relative; flex: 0 0 100%; aspect-ratio: 2 / 1; display: grid; place-items: center; overflow: hidden; }
+.bn-blur { position: absolute; inset: -20px; background-size: cover; background-position: center; filter: blur(24px) saturate(1.1); opacity: .55; }
+.bn-slide picture, .bn-slide img { position: relative; width: 100%; height: 100%; }
+.bn-slide img { object-fit: contain; display: block; }
+.bn-arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgba(255, 255, 255, .92); color: var(--deep, #1f5130); font-size: 26px; line-height: 1; cursor: pointer; box-shadow: 0 6px 18px rgba(0, 0, 0, .18); display: grid; place-items: center; padding-bottom: 3px; opacity: 0; transition: opacity .25s; }
+.bn-frame:hover .bn-arrow, .bn-arrow:focus-visible { opacity: 1; }
+.bn-arrow.prev { left: 14px; } .bn-arrow.next { right: 14px; }
+.bn-dots { position: absolute; left: 0; right: 0; bottom: 12px; display: flex; justify-content: center; gap: 7px; }
+.bn-dots button { width: 8px; height: 8px; border-radius: 999px; border: 0; padding: 0; background: rgba(255, 255, 255, .7); box-shadow: 0 1px 4px rgba(0, 0, 0, .25); cursor: pointer; transition: width .3s, background .3s; }
+.bn-dots button.on { width: 24px; background: var(--gold); }
+@media (max-width: 640px) { .banners { padding: 18px 0 4px; } .bn-frame { border-radius: 16px; } .bn-slide { aspect-ratio: 3 / 2; } .bn-arrow { display: none; } }
+
+/* ================= founders ================= */
+.founders { background: #fff; padding: 20px 0 64px; }
+.founders-card { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: clamp(24px, 4vw, 56px); align-items: center; background: linear-gradient(135deg, #fbf7ee, #f3ead6); border: 1px solid #eadfc6; border-radius: 32px; padding: clamp(18px, 3vw, 34px); box-shadow: 0 24px 60px rgba(90, 64, 20, .10); }
+.founders-photo { position: relative; margin: 0; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 44px rgba(60, 40, 10, .22); }
+.founders-photo img { display: block; width: 100%; height: auto; }
+.founders-photo figcaption { position: absolute; left: 16px; bottom: 16px; background: rgba(90, 52, 24, .92); color: #fff; border-radius: 14px; padding: 8px 14px; font: 600 19px var(--serif); line-height: 1.1; }
+.founders-photo figcaption small { display: block; font: 600 10px var(--sans); letter-spacing: .2em; text-transform: uppercase; color: #f1d9a8; margin-top: 3px; }
+.founders-copy .kicker { color: #9a6b2c; }
+.founders-copy h2 { color: #5a3418; font-size: clamp(30px, 3.8vw, 44px); margin-bottom: 16px; }
+.founders-copy p { color: #4a3d30; font-size: 16.5px; line-height: 1.7; }
+.founders-copy p + p { margin-top: 12px; }
+.founders-copy b { color: #5a3418; }
+.founders-sign { font: italic 600 22px var(--serif) !important; color: #5a3418 !important; margin-top: 18px !important; }
+@media (max-width: 860px) { .founders-card { grid-template-columns: 1fr; border-radius: 24px; } .founders { padding: 8px 0 44px; } }
+
+/* ================= lifestyle gallery ================= */
+.gallery-sec { background: linear-gradient(180deg, #fff, var(--mint, #eef6ec)); padding: 64px 0 72px; }
+.gal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; max-width: 1160px; margin: 0 auto; }
+.gal-item { position: relative; display: block; aspect-ratio: 3 / 4; border-radius: 22px; overflow: hidden; box-shadow: 0 16px 36px rgba(31, 81, 48, .14); }
+.gal-item img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .7s cubic-bezier(.2, .7, .2, 1); }
+.gal-item:hover img { transform: scale(1.05); }
+.gal-item:nth-child(n+9) { display: none; }
+.gal-cta { text-align: center; margin: 30px 0 0; }
+@media (max-width: 760px) { .gal-grid { grid-template-columns: 1fr 1fr; gap: 10px; } .gal-item { border-radius: 16px; } }

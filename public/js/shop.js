@@ -389,6 +389,29 @@
     $('.wa-btn').addEventListener('click', () => { bubble.hidden = true; });
   }
 
+  /* ---------- home banner slider: auto-plays, swipe on phones, pauses on hover ---------- */
+  const bn = $('[data-banners]');
+  if (bn) {
+    const track = $('[data-bn-track]', bn), n = track.children.length, dots = bn.querySelectorAll('[data-bn-go]');
+    let i = 0, timer = null, x0 = null;
+    const go = k => { i = (k + n) % n; track.style.transform = `translateX(${-i * 100}%)`; dots.forEach((d, j) => d.classList.toggle('on', j === i)); };
+    const play = () => { clearInterval(timer); if (n > 1 && !matchMedia('(prefers-reduced-motion: reduce)').matches) timer = setInterval(() => go(i + 1), 5500); };
+    bn.addEventListener('click', e => {
+      const s = e.target.closest('[data-bn-step]'), d = e.target.closest('[data-bn-go]');
+      if (s) { go(i + +s.dataset.bnStep); play(); }
+      if (d) { go(+d.dataset.bnGo); play(); }
+    });
+    track.addEventListener('pointerdown', e => { x0 = e.clientX; });
+    track.addEventListener('pointerup', e => { if (x0 === null) return; const dx = e.clientX - x0; x0 = null; if (Math.abs(dx) > 40) { go(i + (dx < 0 ? 1 : -1)); play(); } });
+    // a swipe must not also open the banner's link
+    track.addEventListener('click', e => { if (track.dataset.swiped) { e.preventDefault(); delete track.dataset.swiped; } }, true);
+    track.addEventListener('pointermove', e => { if (x0 !== null && Math.abs(e.clientX - x0) > 10) track.dataset.swiped = '1'; });
+    bn.addEventListener('mouseenter', () => clearInterval(timer));
+    bn.addEventListener('mouseleave', play);
+    if ('IntersectionObserver' in window) new IntersectionObserver(es => { if (es[0].isIntersecting) play(); else clearInterval(timer); }).observe(bn);
+    else play();
+  }
+
   /* ---------- certificates: full-size viewer ---------- */
   const lb = $('[data-lightbox-box]');
   if (lb) {

@@ -178,3 +178,6 @@ table.mini tr.total td { border-top: 1px solid var(--line); font-weight: 600; pa
 .doc-note { background: #fdf6e3; border: 1px solid #efdca6; color: #6d5313; border-radius: 10px; padding: 8px 12px; font-size: 12.5px; margin: 0 0 10px; }
 .doc .actions { display: flex; gap: 6px; flex-wrap: wrap; }
 @media (max-width: 600px) { .doc { grid-template-columns: 70px 1fr; gap: 12px; } .doc-img img { height: 90px; } }
+.banner-row { grid-template-columns: 220px 1fr; }
+.banner-row .doc-img img { height: 110px; object-fit: cover; }
+@media (max-width: 600px) { .banner-row { grid-template-columns: 1fr; } }

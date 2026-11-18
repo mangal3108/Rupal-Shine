@@ -143,6 +143,7 @@ ${s.announcement ? `<div class="announce"><span>${esc(s.announcement)}</span></d
   <div class="wrap copyright">© ${new Date().getFullYear()} ${esc(s.siteName)}. All rights reserved.</div>
 </footer>
 ${waButton(s, about)}
+${LIGHTBOX}
 <div class="toast" id="toast" hidden></div>
 <script src="${asset('/js/shop.js')}"></script>
 <script src="${asset('/js/fx.js')}" defer></script>
@@ -268,6 +269,8 @@ ${stats.length ? `<section class="stats"><div class="wrap stats-row">
   ${stats.map(x => `<div class="stat reveal"><b data-count="${esc(x.title)}">${esc(x.title)}</b><span>${esc(x.text)}</span></div>`).join('')}
 </div></section>` : ''}
 
+${bannerSlider(db)}
+
 <section class="intro wrap reveal">
   ${s.introKicker ? `<span class="kicker">${esc(s.introKicker)}</span>` : ''}
   <h2>${esc(s.introTitle)}</h2>
@@ -293,11 +296,15 @@ ${s.storyText ? `<section class="story" id="story">
 </section>
 <ul class="facts" aria-label="Good to know">${FACTS.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
 
+${foundersBlock(s)}
+
 ${certStrip(db)}
 
 ${videoBlock(s, f)}
 
 ${whyBlock(s, f)}
+
+${galleryBlock(s, f)}
 
 ${reviewsHome(reviews, f)}
 
@@ -656,6 +663,63 @@ function orderPlaced(db, o) {
   return layout(db, 'Order placed', body);
 }
 
+/* ---------------- brand photos: banner slider, founders, gallery ---------------- */
+// promotional banners under the hero, sliding every few seconds (swipe on phones)
+function bannerSlider(db) {
+  const slides = (db.banners || []).filter(b => b.published && b.image);
+  if (!slides.length) return '';
+  const img = b => `<span class="bn-blur" style="background-image:url('${esc(b.image)}')" aria-hidden="true"></span><picture>${b.mobileImage ? `<source media="(max-width: 640px)" srcset="${esc(b.mobileImage)}">` : ''}<img src="${esc(b.image)}" alt="${esc(b.alt)}"${slides[0] === b ? ' fetchpriority="high"' : ' loading="lazy"'}></picture>`;
+  return `<section class="banners" aria-label="Offers" data-banners>
+  <div class="wrap">
+    <div class="bn-frame">
+      <div class="bn-track" data-bn-track>
+        ${slides.map((b, i) => b.link ? `<a class="bn-slide" href="${esc(b.link)}" aria-label="${esc(b.alt || 'Banner ' + (i + 1))}">${img(b)}</a>` : `<div class="bn-slide">${img(b)}</div>`).join('')}
+      </div>
+      ${slides.length > 1 ? `<button type="button" class="bn-arrow prev" data-bn-step="-1" aria-label="Previous banner">‹</button><button type="button" class="bn-arrow next" data-bn-step="1" aria-label="Next banner">›</button>
+      <div class="bn-dots">${slides.map((_, i) => `<button type="button" data-bn-go="${i}" aria-label="Banner ${i + 1}"${i ? '' : ' class="on"'}></button>`).join('')}</div>` : ''}
+    </div>
+  </div>
+</section>`;
+}
+
+// "Meet our founders": photo card + short text
+function foundersBlock(s) {
+  if (s.foundersShow === false || !s.foundersImage) return '';
+  return `<section class="founders" id="founders">
+  <div class="wrap">
+    <div class="founders-card reveal">
+      <figure class="founders-photo"><img src="${esc(s.foundersImage)}" alt="${esc(s.foundersNames ? s.foundersNames + ', founders of ' + s.siteName : 'Our founders')}" loading="lazy"></figure>
+      <div class="founders-copy">
+        ${s.foundersKicker ? `<span class="kicker">${esc(s.foundersKicker)}</span>` : ''}
+        <h2>${esc(s.foundersTitle || 'Meet our founders')}</h2>
+        ${rich(s.foundersText)}
+        <p class="founders-sign">— ${esc(s.foundersNames || '')}</p>
+      </div>
+    </div>
+  </div>
+</section>`;
+}
+
+// lifestyle photos of the bottle, tap to view full size
+function galleryBlock(s, f) {
+  const pics = (s.galleryImages || []).filter(Boolean);
+  if (s.galleryShow === false || !pics.length) return '';
+  return `<section class="gallery-sec" id="gallery">
+  <div class="wrap">
+    <div class="sec-head reveal">${s.galleryKicker ? `<span class="kicker">${esc(s.galleryKicker)}</span>` : ''}<h2>${esc(s.galleryTitle || 'Gallery')}</h2></div>
+    <div class="gal-grid reveal">
+      ${pics.map((im, i) => `<a class="gal-item" href="${esc(im)}" data-lightbox data-caption="${esc(s.siteName)}"><img src="${esc(im)}" alt="${esc(s.siteName)} herbal oil" loading="lazy"></a>`).join('')}
+    </div>
+    ${f ? `<p class="gal-cta"><a class="btn btn-buy" href="/product/${esc(f.slug)}">Shop ${esc(f.name)} ${ICON.arrow}</a></p>` : ''}
+  </div>
+</section>`;
+}
+// the full-size viewer used by the gallery and the certificates page
+const LIGHTBOX = `<div class="lightbox" data-lightbox-box hidden role="dialog" aria-modal="true" aria-label="Photo">
+  <button type="button" class="lb-close" data-lightbox-close aria-label="Close">${ICON.close}</button>
+  <figure><img alt=""><figcaption></figcaption></figure>
+</div>`;
+
 /* ---------------- certificates & registrations ---------------- */
 const publishedDocs = db => (db.documents || []).filter(d => d.published && d.image);
 const docDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
@@ -715,11 +779,7 @@ function certificates(db) {
   </div>
   <p class="cert-foot">Questions about any certificate? <a href="/contact">Contact us</a> — we are happy to share more details.</p>`
   : '<p class="empty">Certificates will appear here soon.</p>'}
-</section>
-<div class="lightbox" data-lightbox-box hidden role="dialog" aria-modal="true" aria-label="Certificate">
-  <button type="button" class="lb-close" data-lightbox-close aria-label="Close">${ICON.close}</button>
-  <figure><img alt=""><figcaption></figcaption></figure>
-</div>`;
+</section>`;
   return layout(db, 'Certificates & Registrations', body, { path: '/certificates', desc: `${db.settings.siteName} certificates and registrations: ${docs.map(d => d.title).join(', ')}.` });
 }
 

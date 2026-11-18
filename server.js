@@ -185,6 +185,27 @@ const STARTER_DOCUMENTS = [
   }
 ];
 
+// Brand photos. The two promo banners carry numbers ("4.4 star rating", "100000+ sold / happy customers")
+// and health claims; they start hidden so they only go live once the owner confirms the numbers are true.
+const BANNER_NOTE = 'Hidden until you confirm: this banner says “4.4 star rating” and “100000+ hair oil sold / happy customers”. Showing numbers that are not true is a misleading advertisement under the Consumer Protection Act, 2019. Publish it only if you can prove them (e.g. offline sales records, marketplace ratings) — otherwise ask your designer for a version without those numbers.';
+const STARTER_BANNERS = [
+  { image: '/uploads/banner-summer-special.webp', alt: 'Rupali Shine Herbal Oil — Summer Special', link: '/product/rupali-shine-herbal-oil', published: false, note: BANNER_NOTE },
+  { image: '/uploads/banner-ayurvedic.webp', alt: 'Rupali Shine natural herbs hair oil, 100 ml', link: '/product/rupali-shine-herbal-oil', published: false, note: BANNER_NOTE }
+];
+const LIFESTYLE_PHOTOS = ['/uploads/rupali-bottle-bath.webp', '/uploads/rupali-bottle-herbs.webp', '/uploads/rupali-bottle-golden.webp', '/uploads/rupali-bottle-splash.webp'];
+const FOUNDER_DEFAULTS = {
+  foundersShow: true,
+  foundersImage: '/uploads/founders-rupali-ansar.webp',
+  foundersKicker: 'The people behind the bottle',
+  foundersTitle: 'Meet our founders',
+  foundersNames: 'Rupali & Ansar Khan',
+  foundersText: 'Rupali Shine began at home, with a family recipe for hair oil made by hand. Rupali and Ansar Khan started the brand to take that same oil — the same herbs, the same care — to many more homes.\n\nEvery bottle is still prepared and packed at our unit in Ashok Nagar, West Delhi.',
+  galleryShow: true,
+  galleryKicker: 'In every home',
+  galleryTitle: 'Made with nature, made for you',
+  galleryImages: LIFESTYLE_PHOTOS
+};
+
 function prepare() {
 migrate();
 if (!db.secret) db.secret = crypto.randomBytes(32).toString('hex'); // signs admin login cookies
@@ -198,6 +219,16 @@ db.spinOrdered = true;
 db.coupons = db.coupons || [];
 db.reviews = db.reviews || [];
 db.documents = db.documents || [];
+db.banners = db.banners || [];
+// first run with the brand photos: promo banners (kept off until their claims are confirmed),
+// founders section, lifestyle gallery, and the bottle photos added to the product gallery
+if (!db.brandPhotosAdded) {
+  db.brandPhotosAdded = true;
+  if (!db.banners.length) db.banners.push(...STARTER_BANNERS.map(b => ({ id: crypto.randomUUID(), createdAt: new Date().toISOString(), ...b })));
+  const f = db.products.find(p => p.featured) || db.products[0];
+  if (f) for (const im of LIFESTYLE_PHOTOS) if (!f.images.includes(im)) f.images.push(im);
+}
+for (const [k, v] of Object.entries(FOUNDER_DEFAULTS)) if (db.settings[k] === undefined) db.settings[k] = v;
 // first run: the business's certificates and registrations, described exactly as issued
 if (!db.docsSeeded) {
   db.docsSeeded = true;
@@ -1171,6 +1202,34 @@ app.delete('/api/admin/documents/:id', (req, res) => {
   res.json(db.documents);
 });
 
+// home page banner slider
+function bannerFrom(b, existing) {
+  const image = safeImage(b.image);
+  if (!image) throw new Error('Please upload the banner image.');
+  const link = str(b.link, 300);
+  if (link && !/^(\/[\w\-./#?=&%]*|https?:\/\/\S+)$/.test(link)) throw new Error('The link must be a page on this site (e.g. /shop) or start with https://');
+  const x = existing || { id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+  return Object.assign(x, { image, mobileImage: safeImage(b.mobileImage), link, alt: str(b.alt, 140), note: str(b.note, 700), published: !!b.published });
+}
+app.get('/api/admin/banners', (req, res) => res.json(db.banners));
+app.post('/api/admin/banners', (req, res) => {
+  try { db.banners.push(bannerFrom(req.body || {})); res.json(db.banners); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.put('/api/admin/banners/:id', (req, res) => {
+  const x = db.banners.find(i => i.id === req.params.id);
+  if (!x) return res.status(404).json({ error: 'Banner not found.' });
+  const b = req.body || {};
+  if (Object.keys(b).join() === 'published') { x.published = !!b.published; return res.json(db.banners); }
+  try { bannerFrom(b, x); res.json(db.banners); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.post('/api/admin/banners/:id/move', (req, res) => {
+  const i = db.banners.findIndex(x => x.id === req.params.id), j = i + (req.body && req.body.dir === 'up' ? -1 : 1);
+  if (i < 0) return res.status(404).json({ error: 'Banner not found.' });
+  if (j >= 0 && j < db.banners.length) [db.banners[i], db.banners[j]] = [db.banners[j], db.banners[i]];
+  res.json(db.banners);
+});
+app.delete('/api/admin/banners/:id', (req, res) => { db.banners = db.banners.filter(x => x.id !== req.params.id); res.json(db.banners); });
+
 app.get('/api/admin/messages', (req, res) => res.json(db.messages));
 app.delete('/api/admin/messages/:id', (req, res) => {
   db.messages = db.messages.filter(x => x.id !== req.params.id);
@@ -1273,7 +1332,11 @@ app.put('/api/admin/settings', (req, res) => {
   for (const k of ['siteName', 'announcement', 'heroKicker', 'heroTitle', 'heroCta', 'introKicker', 'introTitle', 'herbsTitle', 'email', 'phone', 'whatsapp', 'address', 'footerNote'])
     if (k in b) s[k] = str(b[k], 200);
   for (const k of ['heroSubtitle', 'introText']) if (k in b) s[k] = str(b[k], 600);
-  for (const k of ['journeyKicker', 'journeyTitle', 'storyKicker', 'storyTitle', 'storySign', 'storyCaption', 'videoKicker', 'videoTitle', 'whyKicker', 'whyTitle']) if (k in b) s[k] = str(b[k], 120);
+  for (const k of ['journeyKicker', 'journeyTitle', 'storyKicker', 'storyTitle', 'storySign', 'storyCaption', 'videoKicker', 'videoTitle', 'whyKicker', 'whyTitle', 'foundersKicker', 'foundersTitle', 'foundersNames', 'galleryKicker', 'galleryTitle']) if (k in b) s[k] = str(b[k], 120);
+  if ('foundersText' in b) s.foundersText = str(b.foundersText, 1500);
+  if ('foundersImage' in b) s.foundersImage = safeImage(b.foundersImage);
+  for (const k of ['foundersShow', 'galleryShow']) if (k in b) s[k] = !!b[k];
+  if ('galleryImages' in b) s.galleryImages = (Array.isArray(b.galleryImages) ? b.galleryImages : []).map(safeImage).filter(Boolean).slice(0, 12);
   if ('whyLines' in b) s.whyLines = list(b.whyLines, 8).join('\n');
   if ('videoCaption' in b) s.videoCaption = str(b.videoCaption, 300);
   if ('videoUrl' in b) s.videoUrl = safeUrl(b.videoUrl);
